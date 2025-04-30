@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Clock, Shield, MapPin } from 'lucide-react';
 
 const Index = () => {
+  const openBookingModal = () => {
+    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+    if (modal) modal.showModal();
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -26,7 +31,7 @@ const Index = () => {
               <Button 
                 size="lg"
                 className="bg-white text-primary hover:bg-white/90 btn-animate"
-                onClick={() => document.getElementById('booking-modal').showModal()}
+                onClick={openBookingModal}
               >
                 Book Now
                 <ArrowRight className="ml-2" size={18} />
@@ -103,7 +108,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="bg-white text-primary hover:bg-white/90 btn-animate"
-              onClick={() => document.getElementById('booking-modal').showModal()}
+              onClick={openBookingModal}
             >
               Book Ambulance
             </Button>

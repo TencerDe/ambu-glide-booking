@@ -52,6 +52,11 @@ const Profile = () => {
     }, 1000);
   };
 
+  const openBookingModal = () => {
+    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+    if (modal) modal.showModal();
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -168,7 +173,7 @@ const Profile = () => {
                 <div className="mt-6 flex justify-center">
                   <Button
                     className="gradient-bg btn-animate"
-                    onClick={() => document.getElementById('booking-modal').showModal()}
+                    onClick={openBookingModal}
                   >
                     Book New Ambulance
                   </Button>

@@ -11,6 +11,11 @@ const Navbar = () => {
     setIsOpen(!isOpen);
   };
 
+  const openBookingModal = () => {
+    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+    if (modal) modal.showModal();
+  };
+
   return (
     <nav className="w-full px-4 py-4 fixed top-0 left-0 right-0 z-50 glass-effect">
       <div className="container mx-auto flex justify-between items-center">
@@ -35,7 +40,7 @@ const Navbar = () => {
           <Button 
             variant="secondary" 
             className="btn-animate"
-            onClick={() => document.getElementById('booking-modal').showModal()}
+            onClick={openBookingModal}
           >
             Book Ambulance
           </Button>
@@ -82,7 +87,7 @@ const Navbar = () => {
               variant="secondary" 
               className="btn-animate"
               onClick={() => {
-                document.getElementById('booking-modal').showModal();
+                openBookingModal();
                 toggleMenu();
               }}
             >
