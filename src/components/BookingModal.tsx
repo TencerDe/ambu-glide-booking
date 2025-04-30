@@ -1,10 +1,18 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 
-const initialFormData = {
+interface FormData {
+  name: string;
+  address: string;
+  age: string;
+  ambulanceType: string;
+  vehicleType: string;
+  notes: string;
+}
+
+const initialFormData: FormData = {
   name: '',
   address: '',
   age: '',
@@ -14,9 +22,9 @@ const initialFormData = {
 };
 
 const BookingModal = () => {
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState<FormData>(initialFormData);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -24,7 +32,7 @@ const BookingModal = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     // Form validation
@@ -33,7 +41,8 @@ const BookingModal = () => {
       return;
     }
     
-    if (isNaN(formData.age) || formData.age <= 0) {
+    const ageNumber = Number(formData.age);
+    if (isNaN(ageNumber) || ageNumber <= 0) {
       toast.error('Age must be a valid number');
       return;
     }
@@ -44,12 +53,14 @@ const BookingModal = () => {
     toast.success('Ambulance booked successfully!');
     
     // Close modal and reset form
-    document.getElementById('booking-modal').close();
+    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+    if (modal) modal.close();
     setFormData(initialFormData);
   };
 
   const closeModal = () => {
-    document.getElementById('booking-modal').close();
+    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+    if (modal) modal.close();
     setFormData(initialFormData);
   };
 
