@@ -1,4 +1,6 @@
 
+import React from 'react';
+
 type MessageHandler = (message: any) => void;
 type StatusHandler = (status: string) => void;
 
