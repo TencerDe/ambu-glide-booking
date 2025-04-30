@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
+import { userService } from '@/services/userService';
 
 interface FormData {
   name: string;
@@ -24,6 +25,7 @@ const initialFormData: FormData = {
 
 const BookingModal = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -33,7 +35,7 @@ const BookingModal = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     // Form validation
@@ -48,15 +50,27 @@ const BookingModal = () => {
       return;
     }
     
-    // In a real app, this would send data to the backend
-    // For now, we'll just log and show a success message
-    console.log('Booking data:', formData);
-    toast.success('Ambulance booked successfully!');
-    
-    // Close modal and reset form
-    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
-    if (modal) modal.close();
-    setFormData(initialFormData);
+    try {
+      setIsSubmitting(true);
+      
+      // Convert age to number for the API call
+      await userService.bookRide({
+        ...formData,
+        age: ageNumber,
+      });
+      
+      toast.success('Ambulance booked successfully! Your request has been submitted.');
+      
+      // Close modal and reset form
+      const modal = document.getElementById('booking-modal') as HTMLDialogElement;
+      if (modal) modal.close();
+      setFormData(initialFormData);
+    } catch (error: any) {
+      console.error('Error booking ambulance:', error);
+      toast.error(error.response?.data?.message || 'Failed to book ambulance. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const closeModal = () => {
@@ -173,14 +187,16 @@ const BookingModal = () => {
               variant="outline"
               onClick={closeModal}
               className="px-4 py-2"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               className="px-4 py-2 gradient-bg text-white btn-animate"
+              disabled={isSubmitting}
             >
-              Book Now
+              {isSubmitting ? 'Booking...' : 'Book Now'}
             </Button>
           </div>
         </form>
