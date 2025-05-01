@@ -1,0 +1,14 @@
+
+# After creating all the files, run these commands:
+
+# Create migrations
+python manage.py makemigrations
+
+# Apply migrations
+python manage.py migrate
+
+# Create a superuser (admin)
+python manage.py createsuperuser
+
+# Run the development server
+python manage.py runserver
