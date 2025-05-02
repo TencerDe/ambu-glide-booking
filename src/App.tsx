@@ -9,7 +9,6 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-import BookingModal from "./components/BookingModal";
 import { AuthProvider } from "./hooks/useAuth";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -29,7 +28,6 @@ const App = () => (
         <AuthProvider>
           <Toaster />
           <Sonner />
-          <BookingModal />
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Index />} />

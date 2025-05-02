@@ -1,21 +1,22 @@
 
 import React from 'react';
 import Navbar from '@/components/Navbar';
-import BookingModal from '@/components/BookingModal';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Clock, Shield, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
-  const openBookingModal = () => {
-    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
-    if (modal) modal.showModal();
+  const navigate = useNavigate();
+  
+  const handleBookingClick = () => {
+    // Redirect to a dedicated booking page or login page if needed
+    navigate('/user/login');
   };
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
-      <BookingModal />
       
       {/* Hero Section */}
       <section className="gradient-bg pt-24 pb-20 px-4">
@@ -31,7 +32,7 @@ const Index = () => {
               <Button 
                 size="lg"
                 className="bg-white text-primary hover:bg-white/90 btn-animate"
-                onClick={openBookingModal}
+                onClick={handleBookingClick}
               >
                 Book Now
                 <ArrowRight className="ml-2" size={18} />
@@ -108,7 +109,7 @@ const Index = () => {
             <Button 
               size="lg"
               className="bg-white text-primary hover:bg-white/90 btn-animate"
-              onClick={openBookingModal}
+              onClick={handleBookingClick}
             >
               Book Ambulance
             </Button>
