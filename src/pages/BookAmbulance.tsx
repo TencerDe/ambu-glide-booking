@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -8,6 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { MapPin } from 'lucide-react';
+
+// Add a type definition for the Google Maps window global
+declare global {
+  interface Window {
+    initMap: () => void;
+    google: typeof google;
+  }
+}
 
 interface Location {
   lat: number;
@@ -24,6 +31,7 @@ const BookAmbulance = () => {
   const markerRef = useRef<google.maps.Marker | null>(null);
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
 
   // Get current location on component mount
   useEffect(() => {
@@ -35,22 +43,28 @@ const BookAmbulance = () => {
           // Reverse geocode to get address
           getAddressFromCoords(latitude, longitude);
           
-          // Initialize map with current location
-          initMap(latitude, longitude);
+          // Initialize map with current location after Google Maps is loaded
+          loadGoogleMapsApi().then(() => {
+            initMap(latitude, longitude);
+          });
         },
         (error) => {
           console.error("Error getting location:", error);
           toast.error("Could not get your location. Please enter it manually.");
           
-          // Initialize map with default location
-          initMap(20.5937, 78.9629); // Default to center of India
+          // Initialize map with default location after Google Maps is loaded
+          loadGoogleMapsApi().then(() => {
+            initMap(20.5937, 78.9629); // Default to center of India
+          });
         }
       );
     } else {
       toast.error("Geolocation is not supported by your browser");
       
-      // Initialize map with default location
-      initMap(20.5937, 78.9629); // Default to center of India
+      // Initialize map with default location after Google Maps is loaded
+      loadGoogleMapsApi().then(() => {
+        initMap(20.5937, 78.9629); // Default to center of India
+      });
     }
 
     return () => {
@@ -59,6 +73,36 @@ const BookAmbulance = () => {
       if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     };
   }, []);
+
+  // Function to load Google Maps API dynamically
+  const loadGoogleMapsApi = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.maps) {
+        setGoogleMapsLoaded(true);
+        resolve();
+        return;
+      }
+
+      // Create script element
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      
+      // Set up callbacks
+      script.onload = () => {
+        setGoogleMapsLoaded(true);
+        resolve();
+      };
+      script.onerror = (error) => {
+        console.error('Error loading Google Maps API:', error);
+        reject(error);
+      };
+      
+      // Add script to document
+      document.head.appendChild(script);
+    });
+  };
 
   // Simulate driver movement when ambulance is booked
   useEffect(() => {
@@ -88,10 +132,10 @@ const BookAmbulance = () => {
           updateDriverMarker(newLat, newLng);
           
           // Update map to show both markers
-          if (mapRef.current && currentLocation) {
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend(new google.maps.LatLng(currentLocation.lat, currentLocation.lng));
-            bounds.extend(new google.maps.LatLng(newLat, newLng));
+          if (mapRef.current && currentLocation && window.google) {
+            const bounds = new window.google.maps.LatLngBounds();
+            bounds.extend(new window.google.maps.LatLng(currentLocation.lat, currentLocation.lng));
+            bounds.extend(new window.google.maps.LatLng(newLat, newLng));
             mapRef.current.fitBounds(bounds);
           }
         } else {
@@ -109,28 +153,9 @@ const BookAmbulance = () => {
   }, [ambulanceBooked]);
 
   const initMap = (lat: number, lng: number) => {
-    if (!mapContainerRef.current) return;
-    
-    // Load Google Maps API script
-    if (!window.google) {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=REPLACE_WITH_YOUR_API_KEY&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-      
-      script.onload = () => {
-        createMap(lat, lng);
-      };
-    } else {
-      createMap(lat, lng);
-    }
-  };
-
-  const createMap = (lat: number, lng: number) => {
     if (!mapContainerRef.current || !window.google) return;
     
-    const mapOptions = {
+    const mapOptions: google.maps.MapOptions = {
       center: { lat, lng },
       zoom: 15,
       mapTypeControl: false,
@@ -138,10 +163,10 @@ const BookAmbulance = () => {
       streetViewControl: false,
     };
     
-    mapRef.current = new google.maps.Map(mapContainerRef.current, mapOptions);
+    mapRef.current = new window.google.maps.Map(mapContainerRef.current, mapOptions);
     
     // Add marker for user's location
-    markerRef.current = new google.maps.Marker({
+    markerRef.current = new window.google.maps.Marker({
       position: { lat, lng },
       map: mapRef.current,
       title: "Your location",
@@ -178,26 +203,28 @@ const BookAmbulance = () => {
     
     // In a real implementation, you would make an API call like:
     /*
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status === "OK" && results && results[0]) {
-        setCurrentLocation({
-          lat,
-          lng,
-          address: results[0].formatted_address,
-        });
-      }
-    });
+    if (window.google && window.google.maps) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === "OK" && results && results[0]) {
+          setCurrentLocation({
+            lat,
+            lng,
+            address: results[0].formatted_address,
+          });
+        }
+      });
+    }
     */
   };
 
   const updateDriverMarker = (lat: number, lng: number) => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !window.google) return;
     
     if (driverMarkerRef.current) {
       driverMarkerRef.current.setPosition({ lat, lng });
     } else {
-      driverMarkerRef.current = new google.maps.Marker({
+      driverMarkerRef.current = new window.google.maps.Marker({
         position: { lat, lng },
         map: mapRef.current,
         title: "Driver's location",
