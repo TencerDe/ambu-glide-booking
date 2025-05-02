@@ -11,6 +11,7 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./hooks/useAuth";
 import ProtectedRoute from "./components/ProtectedRoute";
+import BookAmbulance from "./pages/BookAmbulance";
 
 // New role-specific pages
 import UserLogin from "./pages/user/UserLogin";
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/book-ambulance" element={<BookAmbulance />} />
             
             {/* Role-specific login routes */}
             <Route path="/user/login" element={<UserLogin />} />

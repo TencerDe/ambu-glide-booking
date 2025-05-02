@@ -10,8 +10,8 @@ const Index = () => {
   const navigate = useNavigate();
   
   const handleBookingClick = () => {
-    // Redirect to a dedicated booking page or login page if needed
-    navigate('/user/login');
+    // Direct to booking page without requiring login
+    navigate('/book-ambulance');
   };
 
   return (
@@ -103,7 +103,7 @@ const Index = () => {
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready for Emergency Transport?</h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-            Don't wait for an emergency. Register now to save precious time when it matters most.
+            Don't wait for an emergency. Book now to save precious time when it matters most.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Button 
