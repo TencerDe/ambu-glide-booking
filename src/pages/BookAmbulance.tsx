@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -8,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { MapPin, Search } from 'lucide-react';
+import BookingModal from '@/components/BookingModal';
 
 // Add a type definition for the Google Maps window global
 declare global {
@@ -35,6 +35,9 @@ const BookAmbulance = () => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [showModal, setShowModal] = useState<boolean>(false);
 
   // Get current location on component mount
   useEffect(() => {
@@ -89,9 +92,8 @@ const BookAmbulance = () => {
         return;
       }
 
-      // Create script element with a static API key (should be handled by backend or env vars in production)
+      // Create script element with API key
       const script = document.createElement('script');
-      // Using a public API key that can be restricted to your domain in Google Console
       script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNagpur0vQ9g6PGvOy6Y6ezTIZWumNO44&libraries=places`;
       script.async = true;
       script.defer = true;
@@ -112,6 +114,43 @@ const BookAmbulance = () => {
       document.head.appendChild(script);
     });
   };
+
+  // Initialize autocomplete on the search input when Google Maps is loaded
+  useEffect(() => {
+    if (googleMapsLoaded && searchInputRef.current && window.google) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(searchInputRef.current, {
+        types: ['geocode']
+      });
+      
+      // Add listener for place selection
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        if (place && place.geometry && place.geometry.location) {
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          
+          // Update map with the selected location
+          if (mapRef.current) {
+            mapRef.current.setCenter({ lat, lng });
+            mapRef.current.setZoom(16);
+          }
+          
+          if (markerRef.current) {
+            markerRef.current.setPosition({ lat, lng });
+          }
+          
+          const address = place.formatted_address || searchAddress;
+          setCurrentLocation({
+            lat,
+            lng,
+            address
+          });
+          
+          setSearchAddress(address);
+        }
+      });
+    }
+  }, [googleMapsLoaded]);
 
   // Simulate driver movement when ambulance is booked
   useEffect(() => {
@@ -302,21 +341,8 @@ const BookAmbulance = () => {
       return;
     }
     
-    setLoading(true);
-    
-    try {
-      // In a real implementation, you would make an API call to book the ambulance
-      // For demonstration, we'll just simulate a successful booking
-      setTimeout(() => {
-        setAmbulanceBooked(true);
-        toast.success("Ambulance booked successfully! Driver is on the way.");
-        setLoading(false);
-      }, 1500);
-    } catch (error) {
-      console.error("Error booking ambulance:", error);
-      toast.error("Failed to book ambulance. Please try again.");
-      setLoading(false);
-    }
+    // Show the booking modal instead of directly booking
+    setShowModal(true);
   };
 
   return (
@@ -333,6 +359,7 @@ const BookAmbulance = () => {
               {/* Address Search Bar */}
               <div className="p-4 border-b flex gap-2">
                 <Input 
+                  ref={searchInputRef}
                   placeholder="Search for an address" 
                   value={searchAddress} 
                   onChange={(e) => setSearchAddress(e.target.value)}
@@ -420,10 +447,11 @@ const BookAmbulance = () => {
                     className="w-full gradient-bg btn-animate"
                     disabled={loading}
                   >
-                    {loading ? "Booking..." : "Book Ambulance Now"}
+                    {loading ? "Searching..." : "Book Ambulance Now"}
                   </Button>
                 </form>
               ) : (
+                // ... keep existing code (driver information and emergency options)
                 <div className="space-y-6">
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h3 className="text-xl font-semibold text-green-800 mb-2">Ambulance on the way!</h3>
@@ -472,6 +500,18 @@ const BookAmbulance = () => {
           </div>
         </div>
       </main>
+      
+      {/* Booking Modal */}
+      {showModal && (
+        <BookingModal 
+          onClose={() => setShowModal(false)} 
+          onBookingSuccess={() => {
+            setShowModal(false);
+            setAmbulanceBooked(true);
+          }}
+          address={currentLocation?.address || ""}
+        />
+      )}
       
       <Footer />
     </div>

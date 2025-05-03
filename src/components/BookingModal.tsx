@@ -5,6 +5,12 @@ import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { userService } from '@/services/userService';
 
+interface BookingModalProps {
+  onClose: () => void;
+  onBookingSuccess: () => void;
+  address: string;
+}
+
 interface FormData {
   name: string;
   address: string;
@@ -14,17 +20,15 @@ interface FormData {
   notes: string;
 }
 
-const initialFormData: FormData = {
-  name: '',
-  address: '',
-  age: '',
-  ambulanceType: 'With Medical Assistance',
-  vehicleType: 'Van',
-  notes: '',
-};
-
-const BookingModal = () => {
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, address }) => {
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    address: address || '', // Initialize with the address from props
+    age: '',
+    ambulanceType: 'With Medical Assistance',
+    vehicleType: 'Van',
+    notes: '',
+  });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -61,10 +65,8 @@ const BookingModal = () => {
       
       toast.success('Ambulance booked successfully! Your request has been submitted.');
       
-      // Close modal and reset form
-      const modal = document.getElementById('booking-modal') as HTMLDialogElement;
-      if (modal) modal.close();
-      setFormData(initialFormData);
+      // Call the onBookingSuccess callback to update the parent component
+      onBookingSuccess();
     } catch (error: any) {
       console.error('Error booking ambulance:', error);
       toast.error(error.response?.data?.message || 'Failed to book ambulance. Please try again.');
@@ -73,18 +75,12 @@ const BookingModal = () => {
     }
   };
 
-  const closeModal = () => {
-    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
-    if (modal) modal.close();
-    setFormData(initialFormData);
-  };
-
   return (
-    <dialog id="booking-modal" className="modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-white rounded-lg w-full max-w-md p-6 animate-fade-in">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Book an Ambulance</h2>
-          <Button variant="ghost" size="icon" onClick={closeModal}>
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X size={24} />
           </Button>
         </div>
@@ -185,7 +181,7 @@ const BookingModal = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={closeModal}
+              onClick={onClose}
               className="px-4 py-2"
               disabled={isSubmitting}
             >
@@ -201,7 +197,7 @@ const BookingModal = () => {
           </div>
         </form>
       </div>
-    </dialog>
+    </div>
   );
 };
 
