@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { MapPin } from 'lucide-react';
+import { MapPin, Search } from 'lucide-react';
 
 // Add a type definition for the Google Maps window global
 declare global {
@@ -28,59 +28,57 @@ const BookAmbulance = () => {
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [ambulanceBooked, setAmbulanceBooked] = useState<boolean>(false);
   const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [searchAddress, setSearchAddress] = useState<string>('');
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
-  const [apiKey, setApiKey] = useState<string>('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(true);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
   // Get current location on component mount
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          
-          // Set the current location first with a placeholder address
-          setCurrentLocation({
-            lat: latitude,
-            lng: longitude,
-            address: "Loading address..."
-          });
-          
-          // Initialize map only if API key is provided
-          if (apiKey) {
-            loadGoogleMapsApi().then(() => {
-              initMap(latitude, longitude);
-              // After map loads, try to get the address
-              getAddressFromCoords(latitude, longitude);
+    loadGoogleMapsApi().then(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            // Set the current location first with a placeholder address
+            setCurrentLocation({
+              lat: latitude,
+              lng: longitude,
+              address: "Loading address..."
             });
+            
+            // Initialize map
+            initMap(latitude, longitude);
+            // After map loads, try to get the address
+            getAddressFromCoords(latitude, longitude);
+          },
+          (error) => {
+            console.error("Error getting location:", error);
+            toast.error("Could not get your location. Please enter it manually.");
+            
+            // Initialize with default location
+            initMap(20.5937, 78.9629); // Default to center of India
           }
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          toast.error("Could not get your location. Please enter it manually.");
-          
-          // Initialize with default location if API key is provided
-          if (apiKey) {
-            loadGoogleMapsApi().then(() => {
-              initMap(20.5937, 78.9629); // Default to center of India
-            });
-          }
-        }
-      );
-    } else {
-      toast.error("Geolocation is not supported by your browser");
-    }
+        );
+      } else {
+        toast.error("Geolocation is not supported by your browser");
+        initMap(20.5937, 78.9629); // Default to center of India
+      }
+    }).catch(error => {
+      console.error("Error loading Google Maps:", error);
+      toast.error("There was an issue loading the map. Please refresh the page.");
+    });
 
     return () => {
       // Clean up Google Maps instances
       if (markerRef.current) markerRef.current.setMap(null);
       if (driverMarkerRef.current) driverMarkerRef.current.setMap(null);
     };
-  }, [apiKey]); // Re-run when API key changes
+  }, []); // Run once on component mount
 
   // Function to load Google Maps API dynamically
   const loadGoogleMapsApi = (): Promise<void> => {
@@ -91,22 +89,22 @@ const BookAmbulance = () => {
         return;
       }
 
-      // Create script element
+      // Create script element with a static API key (should be handled by backend or env vars in production)
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNagpur0vQ9g6PGvOy6Y6ezTIZWumNO44`;
+      // Using a public API key that can be restricted to your domain in Google Console
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNagpur0vQ9g6PGvOy6Y6ezTIZWumNO44&libraries=places`;
       script.async = true;
       script.defer = true;
       
       // Set up callbacks
       script.onload = () => {
         setGoogleMapsLoaded(true);
-        setShowApiKeyInput(false);
+        geocoderRef.current = new window.google.maps.Geocoder();
         resolve();
       };
       script.onerror = (error) => {
         console.error('Error loading Google Maps API:', error);
-        toast.error('Failed to load Google Maps. Check your API key.');
-        setShowApiKeyInput(true);
+        toast.error('Failed to load maps. Please refresh the page or try again later.');
         reject(error);
       };
       
@@ -215,7 +213,7 @@ const BookAmbulance = () => {
     
     // Now use the Google Maps Geocoding API to get the address
     if (window.google && window.google.maps) {
-      const geocoder = new window.google.maps.Geocoder();
+      const geocoder = geocoderRef.current || new window.google.maps.Geocoder();
       geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
         if (status === "OK" && results && results[0]) {
           setCurrentLocation({
@@ -223,6 +221,7 @@ const BookAmbulance = () => {
             lng,
             address: results[0].formatted_address
           });
+          setSearchAddress(results[0].formatted_address);
         } else {
           console.error("Geocoder failed due to: " + status);
           toast.error("Failed to retrieve address. Please enter it manually.");
@@ -234,6 +233,48 @@ const BookAmbulance = () => {
         }
       });
     }
+  };
+
+  const searchForAddress = () => {
+    if (!searchAddress || !window.google) {
+      toast.error("Please enter an address to search");
+      return;
+    }
+
+    setLoading(true);
+    const geocoder = geocoderRef.current || new window.google.maps.Geocoder();
+    
+    geocoder.geocode({ address: searchAddress }, (results: any, status: any) => {
+      setLoading(false);
+      
+      if (status === "OK" && results && results[0]) {
+        const location = results[0].geometry.location;
+        const lat = location.lat();
+        const lng = location.lng();
+        
+        // Update map center and zoom
+        if (mapRef.current) {
+          mapRef.current.setCenter({ lat, lng });
+          mapRef.current.setZoom(16);
+        }
+        
+        // Update marker position
+        if (markerRef.current) {
+          markerRef.current.setPosition({ lat, lng });
+        }
+        
+        // Update currentLocation state
+        setCurrentLocation({
+          lat,
+          lng,
+          address: results[0].formatted_address
+        });
+        
+        setSearchAddress(results[0].formatted_address);
+      } else {
+        toast.error("Could not find this address. Please try a different one.");
+      }
+    });
   };
 
   const updateDriverMarker = (lat: number, lng: number) => {
@@ -286,146 +327,149 @@ const BookAmbulance = () => {
         <div className="container mx-auto">
           <h1 className="text-3xl font-bold mb-8 text-center">Book an Ambulance</h1>
           
-          {showApiKeyInput && !apiKey ? (
-            <div className="max-w-md mx-auto bg-white shadow-md rounded-lg p-6 mb-8">
-              <h2 className="text-lg font-semibold mb-4">Enter Google Maps API Key</h2>
-              <p className="text-gray-600 mb-4">
-                You need to enter a valid Google Maps API key to use the location features.
-                Get one from the <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Cloud Console</a>.
-              </p>
-              <Input 
-                placeholder="Enter your Google Maps API Key" 
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="mb-4"
-              />
-              <Button 
-                onClick={() => loadGoogleMapsApi()}
-                className="w-full"
-              >
-                Load Maps
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Map Section */}
-              <div className="bg-white shadow-md rounded-lg overflow-hidden">
-                <div ref={mapContainerRef} className="w-full h-[400px]"></div>
-                
-                <div className="p-4 border-t">
-                  <div className="flex items-start gap-2">
-                    <MapPin className="mt-1 flex-shrink-0 text-red-500" />
-                    <div>
-                      <p className="font-medium">Your Location:</p>
-                      <p className="text-gray-600">{currentLocation?.address || "Loading address..."}</p>
-                      {ambulanceBooked && driverLocation && (
-                        <p className="text-green-600 mt-2">
-                          Driver is {calculateDistance(
-                            currentLocation?.lat || 0, 
-                            currentLocation?.lng || 0, 
-                            driverLocation.lat, 
-                            driverLocation.lng
-                          ).toFixed(2)} km away
-                        </p>
-                      )}
-                    </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Map Section */}
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              {/* Address Search Bar */}
+              <div className="p-4 border-b flex gap-2">
+                <Input 
+                  placeholder="Search for an address" 
+                  value={searchAddress} 
+                  onChange={(e) => setSearchAddress(e.target.value)}
+                  className="flex-grow"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      searchForAddress();
+                    }
+                  }}
+                />
+                <Button 
+                  onClick={searchForAddress} 
+                  variant="secondary"
+                  disabled={loading}
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  Find
+                </Button>
+              </div>
+              
+              <div ref={mapContainerRef} className="w-full h-[400px]"></div>
+              
+              <div className="p-4 border-t">
+                <div className="flex items-start gap-2">
+                  <MapPin className="mt-1 flex-shrink-0 text-red-500" />
+                  <div>
+                    <p className="font-medium">Your Location:</p>
+                    <p className="text-gray-600">{currentLocation?.address || "Loading address..."}</p>
+                    {ambulanceBooked && driverLocation && (
+                      <p className="text-green-600 mt-2">
+                        Driver is {calculateDistance(
+                          currentLocation?.lat || 0, 
+                          currentLocation?.lng || 0, 
+                          driverLocation.lat, 
+                          driverLocation.lng
+                        ).toFixed(2)} km away
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
-              
-              {/* Booking Form Section */}
-              <div className="bg-white shadow-md rounded-lg p-6">
-                {!ambulanceBooked ? (
-                  <form onSubmit={handleFormSubmit} className="space-y-6">
-                    <div>
-                      <Label htmlFor="name">Your Name</Label>
-                      <Input id="name" placeholder="Enter your name" required />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input id="phone" placeholder="Enter your phone number" required />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="address">Address</Label>
-                      <Textarea 
-                        id="address" 
-                        placeholder="Confirm your address" 
-                        value={currentLocation?.address || ""}
-                        onChange={(e) => {
-                          if (currentLocation) {
-                            setCurrentLocation({...currentLocation, address: e.target.value});
-                          }
-                        }}
-                        required 
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        You can also click on the map to update your location
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="notes">Additional Notes</Label>
-                      <Textarea id="notes" placeholder="Any special instructions or medical information" />
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full gradient-bg btn-animate"
-                      disabled={loading}
-                    >
-                      {loading ? "Booking..." : "Book Ambulance Now"}
-                    </Button>
-                  </form>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <h3 className="text-xl font-semibold text-green-800 mb-2">Ambulance on the way!</h3>
-                      <p className="text-green-700">
-                        Your ambulance has been dispatched and will arrive shortly. 
-                        You can track the driver's location on the map.
-                      </p>
-                    </div>
-                    
-                    <div className="p-4 border rounded-lg">
-                      <h4 className="font-medium mb-2">Driver Information:</h4>
-                      <div className="space-y-1">
-                        <p><span className="font-medium">Name:</span> John Driver</p>
-                        <p><span className="font-medium">Vehicle:</span> Ambulance #A-125</p>
-                        <p><span className="font-medium">ETA:</span> 5-7 minutes</p>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      className="w-full bg-red-600 hover:bg-red-700"
-                      onClick={() => {
-                        toast.info("Emergency services have been notified of increased urgency");
-                      }}
-                    >
-                      This is extremely urgent!
-                    </Button>
-                    
-                    <Button 
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        setAmbulanceBooked(false);
-                        setDriverLocation(null);
-                        if (driverMarkerRef.current) {
-                          driverMarkerRef.current.setMap(null);
-                          driverMarkerRef.current = null;
-                        }
-                        toast.info("Ambulance booking cancelled");
-                      }}
-                    >
-                      Cancel Ambulance
-                    </Button>
-                  </div>
-                )}
-              </div>
             </div>
-          )}
+            
+            {/* Booking Form Section */}
+            <div className="bg-white shadow-md rounded-lg p-6">
+              {!ambulanceBooked ? (
+                <form onSubmit={handleFormSubmit} className="space-y-6">
+                  <div>
+                    <Label htmlFor="name">Your Name</Label>
+                    <Input id="name" placeholder="Enter your name" required />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" placeholder="Enter your phone number" required />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="address">Address</Label>
+                    <Textarea 
+                      id="address" 
+                      placeholder="Confirm your address" 
+                      value={currentLocation?.address || ""}
+                      onChange={(e) => {
+                        setSearchAddress(e.target.value);
+                        if (currentLocation) {
+                          setCurrentLocation({...currentLocation, address: e.target.value});
+                        }
+                      }}
+                      required 
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      You can also click on the map to update your location or search for an address above
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="notes">Additional Notes</Label>
+                    <Textarea id="notes" placeholder="Any special instructions or medical information" />
+                  </div>
+                  
+                  <Button 
+                    type="submit" 
+                    className="w-full gradient-bg btn-animate"
+                    disabled={loading}
+                  >
+                    {loading ? "Booking..." : "Book Ambulance Now"}
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-6">
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <h3 className="text-xl font-semibold text-green-800 mb-2">Ambulance on the way!</h3>
+                    <p className="text-green-700">
+                      Your ambulance has been dispatched and will arrive shortly. 
+                      You can track the driver's location on the map.
+                    </p>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">Driver Information:</h4>
+                    <div className="space-y-1">
+                      <p><span className="font-medium">Name:</span> John Driver</p>
+                      <p><span className="font-medium">Vehicle:</span> Ambulance #A-125</p>
+                      <p><span className="font-medium">ETA:</span> 5-7 minutes</p>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    className="w-full bg-red-600 hover:bg-red-700"
+                    onClick={() => {
+                      toast.info("Emergency services have been notified of increased urgency");
+                    }}
+                  >
+                    This is extremely urgent!
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setAmbulanceBooked(false);
+                      setDriverLocation(null);
+                      if (driverMarkerRef.current) {
+                        driverMarkerRef.current.setMap(null);
+                        driverMarkerRef.current = null;
+                      }
+                      toast.info("Ambulance booking cancelled");
+                    }}
+                  >
+                    Cancel Ambulance
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </main>
       
