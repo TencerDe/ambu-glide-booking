@@ -1,5 +1,7 @@
 
-# After creating all the files, run these commands:
+# First, make sure you are in the correct directory:
+# You should be in the directory that CONTAINS the ambuk_backend folder and manage.py file
+# NOT inside the ambuk_backend folder itself
 
 # Create migrations
 python manage.py makemigrations
