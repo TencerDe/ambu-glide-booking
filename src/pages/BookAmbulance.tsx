@@ -452,49 +452,6 @@ const BookAmbulance = () => {
                 </form>
               ) : (
                 // ... keep existing code (driver information and emergency options)
-                <div className="space-y-6">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h3 className="text-xl font-semibold text-green-800 mb-2">Ambulance on the way!</h3>
-                    <p className="text-green-700">
-                      Your ambulance has been dispatched and will arrive shortly. 
-                      You can track the driver's location on the map.
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Driver Information:</h4>
-                    <div className="space-y-1">
-                      <p><span className="font-medium">Name:</span> John Driver</p>
-                      <p><span className="font-medium">Vehicle:</span> Ambulance #A-125</p>
-                      <p><span className="font-medium">ETA:</span> 5-7 minutes</p>
-                    </div>
-                  </div>
-                  
-                  <Button 
-                    className="w-full bg-red-600 hover:bg-red-700"
-                    onClick={() => {
-                      toast.info("Emergency services have been notified of increased urgency");
-                    }}
-                  >
-                    This is extremely urgent!
-                  </Button>
-                  
-                  <Button 
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setAmbulanceBooked(false);
-                      setDriverLocation(null);
-                      if (driverMarkerRef.current) {
-                        driverMarkerRef.current.setMap(null);
-                        driverMarkerRef.current = null;
-                      }
-                      toast.info("Ambulance booking cancelled");
-                    }}
-                  >
-                    Cancel Ambulance
-                  </Button>
-                </div>
               )}
             </div>
           </div>

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -30,6 +30,16 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     notes: '',
   });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Update address when prop changes
+  useEffect(() => {
+    if (address) {
+      setFormData(prevData => ({
+        ...prevData,
+        address
+      }));
+    }
+  }, [address]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
