@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -92,9 +93,9 @@ const BookAmbulance = () => {
         return;
       }
 
-      // Create script element with API key
+      // Create script element with updated API key
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCC1FYLxMzKMhSlPTM0nwwjLDd-5fkXT4k&libraries=places`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNagpur0vQ9g6PGvOy6Y6ezTIZWumNO44&libraries=places`;
       script.async = true;
       script.defer = true;
       
@@ -118,39 +119,44 @@ const BookAmbulance = () => {
   // Initialize autocomplete on the search input when Google Maps is loaded
   useEffect(() => {
     if (googleMapsLoaded && searchInputRef.current && window.google) {
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(searchInputRef.current, {
-        types: ['geocode']
-      });
-      
-      // Add listener for place selection
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current?.getPlace();
-        if (place && place.geometry && place.geometry.location) {
-          const lat = place.geometry.location.lat();
-          const lng = place.geometry.location.lng();
-          
-          // Update map with the selected location
-          if (mapRef.current) {
-            mapRef.current.setCenter({ lat, lng });
-            mapRef.current.setZoom(16);
+      try {
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(searchInputRef.current, {
+          types: ['geocode']
+        });
+        
+        // Add listener for place selection
+        autocompleteRef.current.addListener('place_changed', () => {
+          const place = autocompleteRef.current?.getPlace();
+          if (place && place.geometry && place.geometry.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            
+            // Update map with the selected location
+            if (mapRef.current) {
+              mapRef.current.setCenter({ lat, lng });
+              mapRef.current.setZoom(16);
+            }
+            
+            if (markerRef.current) {
+              markerRef.current.setPosition({ lat, lng });
+            }
+            
+            const address = place.formatted_address || searchAddress;
+            setCurrentLocation({
+              lat,
+              lng,
+              address
+            });
+            
+            setSearchAddress(address);
           }
-          
-          if (markerRef.current) {
-            markerRef.current.setPosition({ lat, lng });
-          }
-          
-          const address = place.formatted_address || searchAddress;
-          setCurrentLocation({
-            lat,
-            lng,
-            address
-          });
-          
-          setSearchAddress(address);
-        }
-      });
+        });
+      } catch (error) {
+        console.error('Error initializing autocomplete:', error);
+        toast.error('Could not initialize address search. Please try entering the address manually.');
+      }
     }
-  }, [googleMapsLoaded]);
+  }, [googleMapsLoaded, searchAddress]);
 
   // Simulate driver movement when ambulance is booked
   useEffect(() => {
