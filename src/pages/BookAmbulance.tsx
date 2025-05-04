@@ -95,7 +95,7 @@ const BookAmbulance = () => {
 
       // Create script element with updated API key
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCNagpur0vQ9g6PGvOy6Y6ezTIZWumNO44&libraries=places`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyCC1FYLxMzKMhSlPTM0nwwjLDd-5fkXT4k&libraries=places`;
       script.async = true;
       script.defer = true;
       
