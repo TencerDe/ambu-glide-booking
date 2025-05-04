@@ -1,131 +1,38 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { toast } from 'sonner';
+import GoogleLogin from '@/components/GoogleLogin';
+import { LogIn } from 'lucide-react';
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    userType: 'user',
-  });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Form validation
-    if (!formData.username || !formData.password) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-    
-    // In a real app, this would send data to the backend
-    console.log('Login data:', formData);
-    toast.success(`Logged in as ${formData.userType === 'user' ? 'User' : 'Admin'}`);
-    
-    // Redirect based on user type
-    if (formData.userType === 'user') {
-      window.location.href = '/profile';
-    } else {
-      window.location.href = '/admin-dashboard';
-    }
-  };
-
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
       
       <main className="flex-grow flex items-center justify-center py-20 px-4 gradient-bg">
         <div className="w-full max-w-md glass-effect p-8 animate-fade-in">
-          <h1 className="text-3xl font-bold text-white text-center mb-6">Sign In</h1>
+          <div className="flex items-center justify-center mb-6">
+            <LogIn className="text-white mr-2" size={28} />
+            <h1 className="text-3xl font-bold text-white text-center">Login</h1>
+          </div>
           
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-white mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-white"
-                required
-              />
-            </div>
+          <div className="space-y-6">
+            <GoogleLogin />
             
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-white"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Login As
-              </label>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="userType"
-                    value="user"
-                    checked={formData.userType === 'user'}
-                    onChange={handleChange}
-                    className="mr-2"
-                  />
-                  <span className="text-white">User</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="userType"
-                    value="admin"
-                    checked={formData.userType === 'admin'}
-                    onChange={handleChange}
-                    className="mr-2"
-                  />
-                  <span className="text-white">Admin</span>
-                </label>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t"></span>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-black px-2 text-white/70">Or continue without login</span>
               </div>
             </div>
             
-            <Button
-              type="submit"
-              className="w-full py-2 bg-white text-primary hover:bg-white/90 btn-animate"
-            >
-              Sign In
-            </Button>
-          </form>
-          
-          <div className="mt-6 text-center">
-            <p className="text-white/80">
-              Don't have an account?{' '}
-              <Link to="/signup" className="text-white font-semibold hover:underline">
-                Sign Up
-              </Link>
-            </p>
+            <Link to="/" className="block text-center text-white hover:underline">
+              Back to Home
+            </Link>
           </div>
         </div>
       </main>

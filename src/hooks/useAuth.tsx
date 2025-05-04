@@ -2,73 +2,47 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-type Role = 'user' | 'driver' | 'admin' | null;
+type Role = 'user' | null;
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  role: Role;
-  login: (token: string, role: Role) => void;
+  user: { name: string; email: string; photoUrl?: string } | null;
+  googleLogin: (userData: { name: string; email: string; photoUrl?: string }) => void;
   logout: () => void;
-  checkAuth: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [role, setRole] = useState<Role>(null);
+  const [user, setUser] = useState<{ name: string; email: string; photoUrl?: string } | null>(null);
   const navigate = useNavigate();
 
   // Check if the user is authenticated on mount
   useEffect(() => {
-    checkAuth();
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+      setIsAuthenticated(true);
+    }
   }, []);
 
-  const checkAuth = (): boolean => {
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('role') as Role;
-    
-    if (token && userRole) {
-      setIsAuthenticated(true);
-      setRole(userRole);
-      return true;
-    } else {
-      setIsAuthenticated(false);
-      setRole(null);
-      return false;
-    }
-  };
-
-  const login = (token: string, userRole: Role) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', userRole as string);
+  const googleLogin = (userData: { name: string; email: string; photoUrl?: string }) => {
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
     setIsAuthenticated(true);
-    setRole(userRole);
-    
-    // Redirect based on role
-    switch (userRole) {
-      case 'user':
-        navigate('/profile');
-        break;
-      case 'driver':
-        navigate('/driver/dashboard');
-        break;
-      case 'admin':
-        navigate('/admin/dashboard');
-        break;
-    }
+    navigate('/profile');
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+    localStorage.removeItem('user');
     setIsAuthenticated(false);
-    setRole(null);
+    setUser(null);
     navigate('/');
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, role, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,25 +2,14 @@
 import api from './api';
 
 export const userService = {
-  signup: async (userData: {
-    username: string;
+  googleLogin: async (userData: {
+    name: string;
     email: string;
-    password: string;
-    confirmPassword?: string;
+    photoUrl?: string;
   }) => {
-    const { confirmPassword, ...data } = userData;
-    return api.post('/api/user/signup/', data);
-  },
-
-  login: async (credentials: { username: string; password: string }) => {
-    const response = await api.post('/api/user/login/', credentials);
-    
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('role', 'user');
-    }
-    
-    return response;
+    // In a real app, this would validate the Google token with the backend
+    // For now, we'll just return the user data
+    return { data: { token: 'dummy-token', user: userData } };
   },
 
   getProfile: async () => {
@@ -39,7 +28,6 @@ export const userService = {
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+    localStorage.removeItem('user');
   }
 };
