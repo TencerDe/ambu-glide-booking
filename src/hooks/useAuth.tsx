@@ -15,7 +15,6 @@ interface AuthContextType {
     healthIssues?: string[];
   } | null;
   googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string }) => void;
-  login: (email: string, password: string) => Promise<void>; // Added for compatibility
   logout: () => void;
   updateProfile: (profileData: { 
     bloodGroup?: string;
@@ -54,14 +53,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Add regular login method to fix TypeScript errors
-  const login = async (email: string, password: string) => {
-    // This is a placeholder to fix TypeScript errors
-    // Since we're focusing on Google login, this won't be implemented fully
-    console.warn("Standard login not implemented - use Google login instead");
-    throw new Error("Standard login not implemented");
-  };
-
   const updateProfile = (profileData: {
     bloodGroup?: string;
     age?: number;
@@ -83,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
