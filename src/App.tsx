@@ -11,6 +11,10 @@ import NotFound from "./pages/NotFound";
 import { AuthProvider } from "./hooks/useAuth";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BookAmbulance from "./pages/BookAmbulance";
+import DriverLogin from "./pages/driver/DriverLogin";
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import DriverDashboard from "./pages/driver/DriverDashboard";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +30,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/book-ambulance" element={<BookAmbulance />} />
+            <Route path="/driver/login" element={<DriverLogin />} />
+            <Route path="/admin" element={<AdminLogin />} />
             
             {/* Protected routes */}
             <Route
@@ -36,6 +42,9 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/driver/dashboard" element={<DriverDashboard />} />
             
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />

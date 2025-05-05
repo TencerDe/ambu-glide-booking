@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, User } from 'lucide-react';
+import { Menu, X, User, LogIn } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const Navbar = () => {
@@ -60,6 +60,16 @@ const Navbar = () => {
           >
             Book Ambulance
           </Button>
+          
+          <Link to="/driver/login">
+            <Button 
+              variant="outline" 
+              className="text-white border-white hover:bg-white/10 flex items-center"
+            >
+              <LogIn className="h-4 w-4 mr-1" />
+              Driver Portal
+            </Button>
+          </Link>
         </div>
 
         <button className="md:hidden text-white" onClick={toggleMenu}>
@@ -116,6 +126,19 @@ const Navbar = () => {
             >
               Book Ambulance
             </Button>
+            
+            <Link 
+              to="/driver/login"
+              onClick={toggleMenu}
+            >
+              <Button 
+                variant="outline" 
+                className="text-white border-white hover:bg-white/10 flex items-center"
+              >
+                <LogIn className="h-4 w-4 mr-1" />
+                Driver Portal
+              </Button>
+            </Link>
           </div>
         </div>
       )}

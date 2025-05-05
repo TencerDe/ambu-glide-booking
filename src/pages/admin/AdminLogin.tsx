@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { driverService } from '@/services/driverService';
+import { adminService } from '@/services/adminService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { LogIn } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
-const DriverLogin = () => {
+const AdminLogin = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -16,9 +17,6 @@ const DriverLogin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
-  const location = useLocation();
-  
-  const from = (location.state as any)?.from?.pathname || '/driver/dashboard';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -39,14 +37,18 @@ const DriverLogin = () => {
     
     try {
       setIsSubmitting(true);
-      const response = await driverService.login(formData);
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('role', 'driver');
-      toast.success('Logged in as Driver');
-      navigate(from);
+      // For demo purposes, hardcoded credential check
+      if (formData.username === "admin@ambuk.com" && formData.password === "admin123") {
+        localStorage.setItem('token', 'admin-demo-token');
+        localStorage.setItem('role', 'admin');
+        toast.success('Logged in as Admin');
+        navigate('/admin/dashboard');
+      } else {
+        toast.error('Invalid credentials');
+      }
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error(error.response?.data?.message || 'Login failed. Please check your credentials.');
+      toast.error('Login failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }
@@ -59,22 +61,22 @@ const DriverLogin = () => {
       <main className="flex-grow flex items-center justify-center py-20 px-4 gradient-bg">
         <div className="w-full max-w-md glass-effect p-8 animate-fade-in">
           <div className="flex items-center justify-center mb-6">
-            <LogIn className="text-white mr-2" size={28} />
-            <h1 className="text-3xl font-bold text-white text-center">Driver Login</h1>
+            <ShieldCheck className="text-white mr-2" size={28} />
+            <h1 className="text-3xl font-bold text-white text-center">Admin Login</h1>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-white mb-1">
-                Username
+                Email
               </label>
-              <input
+              <Input
                 type="text"
                 id="username"
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+                className="bg-white/90"
                 disabled={isSubmitting}
                 required
               />
@@ -84,13 +86,13 @@ const DriverLogin = () => {
               <label htmlFor="password" className="block text-sm font-medium text-white mb-1">
                 Password
               </label>
-              <input
+              <Input
                 type="password"
                 id="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-white"
+                className="bg-white/90"
                 disabled={isSubmitting}
                 required
               />
@@ -106,12 +108,11 @@ const DriverLogin = () => {
           </form>
           
           <div className="mt-6 text-center">
-            <p className="text-white/80">
-              Need a user account?{' '}
-              <Link to="/login" className="text-white font-semibold hover:underline">
-                User Login
-              </Link>
-            </p>
+            <div className="mb-2 p-3 bg-blue-100/80 text-blue-800 rounded-md">
+              <p className="text-sm font-medium">Demo Credentials:</p>
+              <p className="text-sm">Email: admin@ambuk.com</p>
+              <p className="text-sm">Password: admin123</p>
+            </div>
           </div>
           
           <div className="mt-2 text-center">
@@ -127,4 +128,4 @@ const DriverLogin = () => {
   );
 };
 
-export default DriverLogin;
+export default AdminLogin;
