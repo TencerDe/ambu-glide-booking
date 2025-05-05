@@ -31,7 +31,10 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/book-ambulance" element={<BookAmbulance />} />
             <Route path="/driver/login" element={<DriverLogin />} />
+            
+            {/* Admin routes */}
             <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             
             {/* Protected routes */}
             <Route
@@ -43,7 +46,6 @@ const App = () => (
               }
             />
             
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/driver/dashboard" element={<DriverDashboard />} />
             
             {/* Catch-all route */}
