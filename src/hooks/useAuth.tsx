@@ -1,8 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-type Role = 'user' | null;
+import { userService } from '../services/userService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -35,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('user');
+    userService.logout();
     setIsAuthenticated(false);
     setUser(null);
     navigate('/');
