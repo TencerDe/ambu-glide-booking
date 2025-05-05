@@ -6,7 +6,7 @@ import { userService } from '../services/userService';
 interface AuthContextType {
   isAuthenticated: boolean;
   user: { name: string; email: string; photoUrl?: string } | null;
-  googleLogin: (userData: { name: string; email: string; photoUrl?: string }) => void;
+  googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string }) => void;
   logout: () => void;
 }
 
@@ -26,11 +26,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const googleLogin = (userData: { name: string; email: string; photoUrl?: string }) => {
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
-    setIsAuthenticated(true);
-    navigate('/profile');
+  const googleLogin = async (userData: { name: string; email: string; photoUrl?: string; token?: string }) => {
+    try {
+      // Store user in local storage
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      setIsAuthenticated(true);
+      navigate('/profile');
+    } catch (error) {
+      console.error('Google login error:', error);
+      throw error;
+    }
   };
 
   const logout = () => {

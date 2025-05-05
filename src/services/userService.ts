@@ -6,10 +6,11 @@ export const userService = {
     name: string;
     email: string;
     photoUrl?: string;
+    token?: string;
   }) => {
-    // In a real app, this would validate the Google token with the backend
+    // In a real app, we would validate the token with the backend
     // For now, we'll just return the user data
-    return { data: { token: 'dummy-token', user: userData } };
+    return { data: { token: userData.token || 'google-token', user: userData } };
   },
 
   getProfile: async () => {

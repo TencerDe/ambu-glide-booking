@@ -5,15 +5,8 @@ import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { User, Calendar, MapPin, Phone, Mail, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Mock data for the profile
-const userData = {
-  username: 'JohnDoe',
-  fullName: 'John Doe',
-  email: 'john.doe@example.com',
-  phone: '+1 (555) 123-4567',
-  address: '123 Main Street, New York, NY 10001',
-};
+import { useAuth } from '@/hooks/useAuth';
+import { Navigate } from 'react-router-dom';
 
 // Mock data for booking history
 const bookingHistory = [
@@ -33,23 +26,18 @@ const bookingHistory = [
     vehicleType: 'Mini Bus',
     status: 'Completed',
   },
-  {
-    id: 'B003',
-    date: '2025-03-22',
-    time: '18:15',
-    ambulanceType: 'With Medical Assistance',
-    vehicleType: 'Van',
-    status: 'Cancelled',
-  },
 ];
 
 const Profile = () => {
+  const { user, logout, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
   const handleLogout = () => {
+    logout();
     toast.success('Logged out successfully!');
-    // In a real app, this would clear the user's session/token
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 1000);
   };
 
   const openBookingModal = () => {
@@ -69,14 +57,21 @@ const Profile = () => {
               <div className="bg-white rounded-xl shadow-md overflow-hidden">
                 <div className="p-6 gradient-bg">
                   <div className="flex justify-center">
-                    <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center">
-                      <User className="w-12 h-12 text-primary" />
-                    </div>
+                    {user.photoUrl ? (
+                      <img 
+                        src={user.photoUrl} 
+                        alt={user.name} 
+                        className="w-24 h-24 rounded-full border-4 border-white"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center">
+                        <User className="w-12 h-12 text-primary" />
+                      </div>
+                    )}
                   </div>
                   <h2 className="text-xl font-bold text-center text-white mt-4">
-                    {userData.fullName}
+                    {user.name}
                   </h2>
-                  <p className="text-white/80 text-center">@{userData.username}</p>
                 </div>
                 
                 <div className="p-6 space-y-4">
@@ -84,23 +79,7 @@ const Profile = () => {
                     <Mail className="w-5 h-5 text-gray-500 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-gray-500">Email</p>
-                      <p className="font-medium">{userData.email}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <Phone className="w-5 h-5 text-gray-500 mt-0.5 mr-3" />
-                    <div>
-                      <p className="text-sm text-gray-500">Phone</p>
-                      <p className="font-medium">{userData.phone}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <MapPin className="w-5 h-5 text-gray-500 mt-0.5 mr-3" />
-                    <div>
-                      <p className="text-sm text-gray-500">Address</p>
-                      <p className="font-medium">{userData.address}</p>
+                      <p className="font-medium">{user.email}</p>
                     </div>
                   </div>
                 </div>
