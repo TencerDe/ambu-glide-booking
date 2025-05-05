@@ -5,16 +5,31 @@ import { userService } from '../services/userService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: { name: string; email: string; photoUrl?: string } | null;
+  user: { 
+    name: string; 
+    email: string; 
+    photoUrl?: string;
+    bloodGroup?: string;
+    age?: number;
+    preferredHospital?: string;
+    healthIssues?: string[];
+  } | null;
   googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string }) => void;
+  login: (email: string, password: string) => Promise<void>; // Added for compatibility
   logout: () => void;
+  updateProfile: (profileData: { 
+    bloodGroup?: string;
+    age?: number;
+    preferredHospital?: string;
+    healthIssues?: string[];
+  }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<{ name: string; email: string; photoUrl?: string } | null>(null);
+  const [user, setUser] = useState<AuthContextType['user']>(null);
   const navigate = useNavigate();
 
   // Check if the user is authenticated on mount
@@ -39,6 +54,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Add regular login method to fix TypeScript errors
+  const login = async (email: string, password: string) => {
+    // This is a placeholder to fix TypeScript errors
+    // Since we're focusing on Google login, this won't be implemented fully
+    console.warn("Standard login not implemented - use Google login instead");
+    throw new Error("Standard login not implemented");
+  };
+
+  const updateProfile = (profileData: {
+    bloodGroup?: string;
+    age?: number;
+    preferredHospital?: string;
+    healthIssues?: string[];
+  }) => {
+    if (user) {
+      const updatedUser = { ...user, ...profileData };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
+  };
+
   const logout = () => {
     userService.logout();
     setIsAuthenticated(false);
@@ -47,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

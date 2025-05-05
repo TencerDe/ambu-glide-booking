@@ -1,6 +1,14 @@
 
 import api from './api';
 
+// Define profile data type for TypeScript
+interface ProfileData {
+  bloodGroup?: string;
+  age?: number;
+  preferredHospital?: string;
+  healthIssues?: string[];
+}
+
 export const userService = {
   googleLogin: async (userData: {
     name: string;
@@ -15,6 +23,12 @@ export const userService = {
 
   getProfile: async () => {
     return api.get('/api/user/profile/');
+  },
+
+  updateProfile: async (profileData: ProfileData) => {
+    // In a real app, we would send this to the backend
+    // For now, we'll just return the updated profile data
+    return { data: profileData };
   },
 
   bookRide: async (bookingData: {

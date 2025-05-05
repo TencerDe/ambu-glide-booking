@@ -3,10 +3,11 @@ import React from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
-import { User, Calendar, MapPin, Phone, Mail, LogOut } from 'lucide-react';
+import { User, Calendar, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
+import ProfileForm from '@/components/ProfileForm';
 
 // Mock data for booking history
 const bookingHistory = [
@@ -76,12 +77,29 @@ const Profile = () => {
                 
                 <div className="p-6 space-y-4">
                   <div className="flex items-start">
-                    <Mail className="w-5 h-5 text-gray-500 mt-0.5 mr-3" />
                     <div>
                       <p className="text-sm text-gray-500">Email</p>
                       <p className="font-medium">{user.email}</p>
                     </div>
                   </div>
+                  
+                  {user.bloodGroup && (
+                    <div className="flex items-start">
+                      <div>
+                        <p className="text-sm text-gray-500">Blood Group</p>
+                        <p className="font-medium">{user.bloodGroup}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {user.age && (
+                    <div className="flex items-start">
+                      <div>
+                        <p className="text-sm text-gray-500">Age</p>
+                        <p className="font-medium">{user.age}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="px-6 pb-6">
@@ -95,10 +113,44 @@ const Profile = () => {
                   </Button>
                 </div>
               </div>
+              
+              {/* Health Profile Section */}
+              <div className="bg-white rounded-xl shadow-md overflow-hidden mt-6 p-6">
+                <h3 className="text-lg font-semibold mb-4">Health Profile</h3>
+                
+                {user.preferredHospital && (
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-500">Preferred Hospital</p>
+                    <p className="font-medium">{user.preferredHospital}</p>
+                  </div>
+                )}
+                
+                {user.healthIssues && user.healthIssues.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-500">Health Issues</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {user.healthIssues.map(issue => (
+                        <span 
+                          key={issue}
+                          className="text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-1"
+                        >
+                          {issue}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
-            {/* Booking History */}
             <div className="md:col-span-2">
+              {/* Profile Update Form */}
+              <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+                <h3 className="text-xl font-bold mb-6">Update Health Profile</h3>
+                <ProfileForm />
+              </div>
+            
+              {/* Booking History */}
               <div className="bg-white rounded-xl shadow-md p-6">
                 <h3 className="text-xl font-bold mb-6 flex items-center">
                   <Calendar className="w-5 h-5 mr-2" />
