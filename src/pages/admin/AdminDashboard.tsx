@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { adminService } from '@/services/adminService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { User, Calendar, Clock, MapPin, Phone, Car, License, IdCard } from 'lucide-react';
+import { User, Calendar, Clock, MapPin, Phone, Car, FileText, IdCard } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   Form,
@@ -421,7 +420,7 @@ const AdminDashboard = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center text-sm text-gray-500">
-                              <License className="h-4 w-4 mr-1" /> 
+                              <FileText className="h-4 w-4 mr-1" /> 
                               {driver.licenseNumber}
                             </div>
                             <div className="flex items-center text-sm text-gray-500 mt-1">
