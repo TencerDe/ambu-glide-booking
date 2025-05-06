@@ -12,7 +12,7 @@ export const initializeTestDriver = async () => {
       licenseNumber: 'Dl8755671yu77',
       address: 'jawli Village, Loni',
       vehicleNumber: 'UP14EN7476',
-      phoneNumber: '9876543210', // Added a default phone number
+      phoneNumber: '9876543210',
     };
 
     console.log('Initializing test driver:', testDriver);
@@ -23,8 +23,12 @@ export const initializeTestDriver = async () => {
     
     if (!driverExists) {
       console.log('Creating test driver...');
-      await adminService.createDriver(testDriver);
-      console.log('Test driver created successfully');
+      try {
+        await adminService.createDriver(testDriver);
+        console.log('Test driver created successfully');
+      } catch (error) {
+        console.error('Failed to create test driver:', error);
+      }
     } else {
       console.log('Test driver already exists');
     }
