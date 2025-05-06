@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -94,32 +95,38 @@ const AdminDashboard = () => {
         const ridesResponse = await adminService.viewRides();
         setRides(ridesResponse.data);
         
-        // In a real app, you'd also fetch drivers here
-        // For now, we'll use dummy data
-        setDrivers([
-          { 
-            id: '1', 
-            name: 'John Driver', 
-            username: 'john_driver', 
-            is_available: true,
-            phoneNumber: '9876543210',
-            licenseNumber: 'DL12345678',
-            aadhaarNumber: '123456789012',
-            address: '123 Driver St, City',
-            vehicleNumber: 'MH01AB1234'
-          },
-          { 
-            id: '2', 
-            name: 'Sarah Driver', 
-            username: 'sarah_driver', 
-            is_available: false,
-            phoneNumber: '9876543211',
-            licenseNumber: 'DL87654321',
-            aadhaarNumber: '987654321098',
-            address: '456 Driver Ave, Town',
-            vehicleNumber: 'MH02CD5678'
-          },
-        ]);
+        try {
+          // Try to fetch real drivers data
+          const driversResponse = await adminService.viewDrivers();
+          setDrivers(driversResponse.data);
+        } catch (driverError) {
+          console.error('Error fetching drivers:', driverError);
+          // Fallback to dummy data if API fails
+          setDrivers([
+            { 
+              id: '1', 
+              name: 'John Driver', 
+              username: 'john_driver', 
+              is_available: true,
+              phoneNumber: '9876543210',
+              licenseNumber: 'DL12345678',
+              aadhaarNumber: '123456789012',
+              address: '123 Driver St, City',
+              vehicleNumber: 'MH01AB1234'
+            },
+            { 
+              id: '2', 
+              name: 'Sarah Driver', 
+              username: 'sarah_driver', 
+              is_available: false,
+              phoneNumber: '9876543211',
+              licenseNumber: 'DL87654321',
+              aadhaarNumber: '987654321098',
+              address: '456 Driver Ave, Town',
+              vehicleNumber: 'MH02CD5678'
+            },
+          ]);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         toast.error('Failed to load dashboard data');
@@ -161,7 +168,9 @@ const AdminDashboard = () => {
     
     try {
       setIsSubmittingDriver(true);
-      await adminService.createDriver(newDriver);
+      console.log('Submitting driver data:', newDriver);
+      const response = await adminService.createDriver(newDriver);
+      console.log('Create driver response:', response);
       toast.success('Driver created successfully');
       setDialogOpen(false);
       
@@ -178,11 +187,21 @@ const AdminDashboard = () => {
         vehicleNumber: ''
       });
       
-      // In a real app, you'd refresh the drivers list here
+      // Refresh the drivers list
+      try {
+        const driversResponse = await adminService.viewDrivers();
+        setDrivers(driversResponse.data);
+      } catch (driverError) {
+        console.error('Error fetching updated drivers:', driverError);
+      }
       
     } catch (error: any) {
       console.error('Error creating driver:', error);
-      toast.error(error.response?.data?.message || 'Failed to create driver');
+      const errorMessage = error.response?.data?.detail || 
+                         error.response?.data?.message || 
+                         error.response?.data?.error ||
+                         'Failed to create driver';
+      toast.error(errorMessage);
     } finally {
       setIsSubmittingDriver(false);
     }
