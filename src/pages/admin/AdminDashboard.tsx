@@ -6,8 +6,28 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { adminService } from '@/services/adminService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { User, Calendar, Clock, MapPin } from 'lucide-react';
+import { User, Calendar, Clock, MapPin, Phone, Car, License, IdCard } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { 
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { useForm } from 'react-hook-form';
 
 interface RideRequest {
   id: string;
@@ -28,20 +48,44 @@ interface Driver {
   name: string;
   username: string;
   is_available: boolean;
+  phoneNumber?: string;
+  licenseNumber?: string;
+  aadhaarNumber?: string;
+  address?: string;
+  vehicleNumber?: string;
+}
+
+interface DriverFormData {
+  name: string;
+  username: string;
+  password: string;
+  email: string;
+  phoneNumber: string;
+  aadhaarNumber: string;
+  licenseNumber: string;
+  address: string;
+  vehicleNumber: string;
 }
 
 const AdminDashboard = () => {
   const [rides, setRides] = useState<RideRequest[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [newDriver, setNewDriver] = useState({
+  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { logout } = useAuth();
+  
+  const [newDriver, setNewDriver] = useState<DriverFormData>({
     name: '',
     username: '',
     password: '',
     email: '',
+    phoneNumber: '',
+    aadhaarNumber: '',
+    licenseNumber: '',
+    address: '',
+    vehicleNumber: ''
   });
-  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
-  const { logout } = useAuth();
 
   // Fetch data on component mount
   useEffect(() => {
@@ -54,8 +98,28 @@ const AdminDashboard = () => {
         // In a real app, you'd also fetch drivers here
         // For now, we'll use dummy data
         setDrivers([
-          { id: '1', name: 'John Driver', username: 'john_driver', is_available: true },
-          { id: '2', name: 'Sarah Driver', username: 'sarah_driver', is_available: false },
+          { 
+            id: '1', 
+            name: 'John Driver', 
+            username: 'john_driver', 
+            is_available: true,
+            phoneNumber: '9876543210',
+            licenseNumber: 'DL12345678',
+            aadhaarNumber: '123456789012',
+            address: '123 Driver St, City',
+            vehicleNumber: 'MH01AB1234'
+          },
+          { 
+            id: '2', 
+            name: 'Sarah Driver', 
+            username: 'sarah_driver', 
+            is_available: false,
+            phoneNumber: '9876543211',
+            licenseNumber: 'DL87654321',
+            aadhaarNumber: '987654321098',
+            address: '456 Driver Ave, Town',
+            vehicleNumber: 'MH02CD5678'
+          },
         ]);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -68,8 +132,14 @@ const AdminDashboard = () => {
     fetchData();
   }, []);
 
-  const handleDriverInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDriverInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // For Aadhaar number, only allow numerical input
+    if (name === 'aadhaarNumber' && !/^\d*$/.test(value)) {
+      return;
+    }
+    
     setNewDriver({
       ...newDriver,
       [name]: value,
@@ -84,17 +154,29 @@ const AdminDashboard = () => {
       return;
     }
     
+    // Validation for Aadhaar number (12 digits)
+    if (newDriver.aadhaarNumber && newDriver.aadhaarNumber.length !== 12) {
+      toast.error('Aadhaar number must be exactly 12 digits');
+      return;
+    }
+    
     try {
       setIsSubmittingDriver(true);
       await adminService.createDriver(newDriver);
       toast.success('Driver created successfully');
+      setDialogOpen(false);
       
-      // Reset form and refresh drivers list
+      // Reset form
       setNewDriver({
         name: '',
         username: '',
         password: '',
         email: '',
+        phoneNumber: '',
+        aadhaarNumber: '',
+        licenseNumber: '',
+        address: '',
+        vehicleNumber: ''
       });
       
       // In a real app, you'd refresh the drivers list here
@@ -133,15 +215,15 @@ const AdminDashboard = () => {
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">Drivers</h2>
-                <Dialog>
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="gradient-bg btn-animate">Add New Driver</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="sm:max-w-[550px]">
                     <DialogHeader>
                       <DialogTitle>Create Driver Account</DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleCreateDriver} className="space-y-4 pt-4">
+                    <form onSubmit={handleCreateDriver} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
                       <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                           Full Name *
@@ -157,47 +239,129 @@ const AdminDashboard = () => {
                         />
                       </div>
                       
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                            Username *
+                          </label>
+                          <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            value={newDriver.username}
+                            onChange={handleDriverInputChange}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                            Password *
+                          </label>
+                          <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            value={newDriver.password}
+                            onChange={handleDriverInputChange}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                            Email
+                          </label>
+                          <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={newDriver.email}
+                            onChange={handleDriverInputChange}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
+                            Phone Number *
+                          </label>
+                          <input
+                            type="tel"
+                            id="phoneNumber"
+                            name="phoneNumber"
+                            value={newDriver.phoneNumber}
+                            onChange={handleDriverInputChange}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="aadhaarNumber" className="block text-sm font-medium text-gray-700">
+                            Aadhaar Number * (12 digits)
+                          </label>
+                          <input
+                            type="text"
+                            id="aadhaarNumber"
+                            name="aadhaarNumber"
+                            value={newDriver.aadhaarNumber}
+                            onChange={handleDriverInputChange}
+                            maxLength={12}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="licenseNumber" className="block text-sm font-medium text-gray-700">
+                            License Number *
+                          </label>
+                          <input
+                            type="text"
+                            id="licenseNumber"
+                            name="licenseNumber"
+                            value={newDriver.licenseNumber}
+                            onChange={handleDriverInputChange}
+                            className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+                      
                       <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                          Username *
+                        <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                          Address *
+                        </label>
+                        <textarea
+                          id="address"
+                          name="address"
+                          value={newDriver.address}
+                          onChange={handleDriverInputChange}
+                          rows={3}
+                          className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                          required
+                        ></textarea>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="vehicleNumber" className="block text-sm font-medium text-gray-700">
+                          Vehicle Number *
                         </label>
                         <input
                           type="text"
-                          id="username"
-                          name="username"
-                          value={newDriver.username}
+                          id="vehicleNumber"
+                          name="vehicleNumber"
+                          value={newDriver.vehicleNumber}
                           onChange={handleDriverInputChange}
                           className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                          Password *
-                        </label>
-                        <input
-                          type="password"
-                          id="password"
-                          name="password"
-                          value={newDriver.password}
-                          onChange={handleDriverInputChange}
-                          className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                          Email
-                        </label>
-                        <input
-                          type="email"
-                          id="email"
-                          name="email"
-                          value={newDriver.email}
-                          onChange={handleDriverInputChange}
-                          className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                       </div>
                       
@@ -221,40 +385,57 @@ const AdminDashboard = () => {
                 </div>
               ) : drivers.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Username
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Driver Info</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Documents</TableHead>
+                        <TableHead>Vehicle</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {drivers.map((driver) => (
-                        <tr key={driver.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                        <TableRow key={driver.id}>
+                          <TableCell>
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
                                 <User className="h-5 w-5 text-gray-500" />
                               </div>
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-gray-900">{driver.name}</div>
+                                <div className="text-xs text-gray-500">@{driver.username}</div>
                               </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{driver.username}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center text-sm text-gray-500">
+                              <Phone className="h-4 w-4 mr-1" /> 
+                              {driver.phoneNumber}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {driver.address}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center text-sm text-gray-500">
+                              <License className="h-4 w-4 mr-1" /> 
+                              {driver.licenseNumber}
+                            </div>
+                            <div className="flex items-center text-sm text-gray-500 mt-1">
+                              <IdCard className="h-4 w-4 mr-1" />
+                              {driver.aadhaarNumber}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center text-sm text-gray-500">
+                              <Car className="h-4 w-4 mr-1" /> 
+                              {driver.vehicleNumber}
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               driver.is_available 
                                 ? 'bg-green-100 text-green-800'
@@ -262,19 +443,19 @@ const AdminDashboard = () => {
                             }`}>
                               {driver.is_available ? 'Available' : 'Unavailable'}
                             </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          </TableCell>
+                          <TableCell>
                             <Button variant="outline" size="sm" className="mr-2">
                               Edit
                             </Button>
                             <Button variant="outline" size="sm" className="text-red-500 border-red-500 hover:bg-red-50">
                               Remove
                             </Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-lg p-8 text-center">
@@ -292,43 +473,31 @@ const AdminDashboard = () => {
                 </div>
               ) : rides.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          ID
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Patient
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date & Time
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Ambulance Type
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Assigned Driver
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Patient</TableHead>
+                        <TableHead>Date & Time</TableHead>
+                        <TableHead>Ambulance Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Assigned Driver</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {rides.map((ride) => (
-                        <tr key={ride.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <TableRow key={ride.id}>
+                          <TableCell className="text-sm text-gray-500">
                             {ride.id.slice(0, 8)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          </TableCell>
+                          <TableCell>
                             <div className="text-sm font-medium text-gray-900">{ride.name}</div>
                             <div className="text-sm text-gray-500 flex items-center">
                               <MapPin className="h-3 w-3 mr-1" />
                               {ride.address}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          </TableCell>
+                          <TableCell>
                             <div className="text-sm text-gray-900 flex items-center">
                               <Calendar className="h-3 w-3 mr-1" />
                               {new Date(ride.createdAt).toLocaleDateString()}
@@ -337,12 +506,12 @@ const AdminDashboard = () => {
                               <Clock className="h-3 w-3 mr-1" />
                               {new Date(ride.createdAt).toLocaleTimeString()}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
                             {ride.ambulanceType}<br />
                             <span className="text-xs">{ride.vehicleType}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          </TableCell>
+                          <TableCell>
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               ride.status === 'pending' 
                                 ? 'bg-yellow-100 text-yellow-800'
@@ -354,14 +523,14 @@ const AdminDashboard = () => {
                             }`}>
                               {ride.status}
                             </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
                             {ride.driver ? ride.driver.name : 'Unassigned'}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-lg p-8 text-center">

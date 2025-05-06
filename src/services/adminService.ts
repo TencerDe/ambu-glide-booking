@@ -18,6 +18,11 @@ export const adminService = {
     username: string;
     password: string;
     email?: string;
+    phoneNumber?: string;
+    aadhaarNumber?: string;
+    licenseNumber?: string;
+    address?: string;
+    vehicleNumber?: string;
   }) => {
     return api.post('/api/admin/create-driver/', driverData);
   },
