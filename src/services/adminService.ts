@@ -1,5 +1,6 @@
-
 import api from './api';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export const adminService = {
   login: async (credentials: { username: string; password: string }) => {
@@ -52,71 +53,140 @@ export const adminService = {
     address?: string;
     vehicleNumber?: string;
   }) => {
-    // Format the data according to the backend expectations
-    const formattedData = {
-      first_name: driverData.name.split(' ')[0],
-      last_name: driverData.name.split(' ').slice(1).join(' ') || '',
-      username: driverData.username,
-      email: driverData.email || `${driverData.username}@example.com`,
-      password: driverData.password,
-      phone_number: driverData.phoneNumber,
-      license_number: driverData.licenseNumber,
-      vehicle_number: driverData.vehicleNumber,
-      aadhaar_number: driverData.aadhaarNumber,
-      address: driverData.address,
-    };
-    
-    console.log('Formatted driver data:', formattedData);
-    
     try {
-      // Try to use the API first
-      const response = await api.post('/api/admin/create-driver/', formattedData);
-      return response;
-    } catch (error) {
-      console.error('API error when creating driver:', error);
+      console.log('Creating driver with Supabase:', driverData);
       
-      // Fallback: Store driver in localStorage if API fails
-      const storedDrivers = JSON.parse(localStorage.getItem('drivers') || '[]');
-      
-      // Check if username already exists
-      const driverExists = storedDrivers.some((driver: any) => driver.username === driverData.username);
-      if (driverExists) {
-        const error = new Error(`Driver with username ${driverData.username} already exists`);
-        throw error;
+      // First check if the username is already taken
+      const { data: existingDriver, error: checkError } = await supabase
+        .from('drivers')
+        .select('id')
+        .eq('username', driverData.username)
+        .single();
+        
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is the "not found" error
+        console.error('Error checking for existing driver:', checkError);
+        throw new Error('Failed to check if username exists');
       }
       
-      const newDriver = {
-        id: Date.now().toString(),
-        name: driverData.name,
-        username: driverData.username,
-        email: formattedData.email,
-        is_available: true,
-        phoneNumber: driverData.phoneNumber,
-        licenseNumber: driverData.licenseNumber,
-        aadhaarNumber: driverData.aadhaarNumber,
-        address: driverData.address,
-        vehicleNumber: driverData.vehicleNumber,
-      };
+      if (existingDriver) {
+        throw new Error(`Driver with username ${driverData.username} already exists`);
+      }
       
-      storedDrivers.push(newDriver);
-      localStorage.setItem('drivers', JSON.stringify(storedDrivers));
+      // Insert the new driver
+      const { data: driver, error } = await supabase
+        .from('drivers')
+        .insert([
+          {
+            name: driverData.name,
+            username: driverData.username,
+            phone_number: driverData.phoneNumber,
+            license_number: driverData.licenseNumber,
+            aadhaar_number: driverData.aadhaarNumber,
+            address: driverData.address,
+            vehicle_number: driverData.vehicleNumber,
+            is_available: true
+          }
+        ])
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error creating driver:', error);
+        throw new Error('Failed to create driver: ' + error.message);
+      }
       
-      // Also store driver credentials for login
-      const driverCredentials = JSON.parse(localStorage.getItem('driverCredentials') || '{}');
-      driverCredentials[driverData.username] = {
-        password: driverData.password,
-        driverId: newDriver.id
-      };
-      localStorage.setItem('driverCredentials', JSON.stringify(driverCredentials));
+      // Add driver credentials
+      const { error: credError } = await supabase
+        .from('driver_credentials')
+        .insert([
+          {
+            driver_id: driver.id,
+            password: driverData.password
+          }
+        ]);
+        
+      if (credError) {
+        console.error('Error creating driver credentials:', credError);
+        
+        // Rollback driver creation if credentials fail
+        await supabase
+          .from('drivers')
+          .delete()
+          .eq('id', driver.id);
+          
+        throw new Error('Failed to create driver credentials');
+      }
       
-      // Return a mock response
-      return {
-        data: newDriver,
-        status: 200,
-        statusText: 'OK (Mocked)',
-        headers: {},
-        config: {},
-      };
+      return { data: driver };
+    } catch (error: any) {
+      console.error('Error in createDriver:', error);
+      
+      // If it's a Supabase error or our custom error, pass it through
+      if (error.message) {
+        throw new Error(error.message);
+      }
+      
+      // Otherwise, provide a generic error
+      throw new Error('Failed to create driver');
+    }
+  },
+
+  updateDriver: async (driverId: string, driverData: {
+    name?: string;
+    phoneNumber?: string;
+    licenseNumber?: string;
+    address?: string;
+    vehicleNumber?: string;
+    is_available?: boolean;
+  }) => {
+    try {
+      console.log('Updating driver with Supabase:', driverId, driverData);
+      
+      const { data, error } = await supabase
+        .from('drivers')
+        .update({
+          name: driverData.name,
+          phone_number: driverData.phoneNumber,
+          license_number: driverData.licenseNumber,
+          address: driverData.address,
+          vehicle_number: driverData.vehicleNumber,
+          is_available: driverData.is_available,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', driverId)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error updating driver:', error);
+        throw new Error('Failed to update driver');
+      }
+      
+      return { data };
+    } catch (error) {
+      console.error('Error in updateDriver:', error);
+      throw error;
+    }
+  },
+  
+  deleteDriver: async (driverId: string) => {
+    try {
+      console.log('Deleting driver with Supabase:', driverId);
+      
+      const { error } = await supabase
+        .from('drivers')
+        .delete()
+        .eq('id', driverId);
+        
+      if (error) {
+        console.error('Error deleting driver:', error);
+        throw new Error('Failed to delete driver');
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error in deleteDriver:', error);
+      throw error;
     }
   },
 
@@ -164,46 +234,57 @@ export const adminService = {
   
   viewDrivers: async () => {
     try {
-      const response = await api.get('/api/admin/drivers/');
-      return response;
-    } catch (error) {
-      console.error('API error when fetching drivers:', error);
+      console.log('Fetching drivers from Supabase');
       
-      // Return drivers from localStorage if API fails
-      const storedDrivers = JSON.parse(localStorage.getItem('drivers') || '[]');
-      
-      if (storedDrivers.length === 0) {
-        // Return some mock data if no drivers in localStorage
-        const mockDrivers = [
-          { 
-            id: '1', 
-            name: 'Sachin Bisht', 
-            username: 'sachin', 
-            is_available: true,
-            phoneNumber: '9876543210',
-            licenseNumber: 'DL8755671yu77',
-            aadhaarNumber: '123456789012',
-            address: 'jawli Village, Loni',
-            vehicleNumber: 'UP14EN7476'
-          }
-        ];
+      const { data: drivers, error } = await supabase
+        .from('drivers')
+        .select('*')
+        .order('created_at', { ascending: false });
         
+      if (error) {
+        console.error('Error fetching drivers:', error);
+        throw new Error('Failed to fetch drivers');
+      }
+      
+      // Format the drivers to match our expected structure
+      const formattedDrivers = drivers.map(driver => ({
+        id: driver.id,
+        name: driver.name,
+        username: driver.username,
+        is_available: driver.is_available,
+        phoneNumber: driver.phone_number,
+        licenseNumber: driver.license_number,
+        aadhaarNumber: driver.aadhaar_number,
+        address: driver.address,
+        vehicleNumber: driver.vehicle_number
+      }));
+      
+      return { data: formattedDrivers };
+    } catch (error) {
+      console.error('Error in viewDrivers:', error);
+      
+      // Fallback to localStorage if Supabase fails
+      try {
+        const storedDrivers = JSON.parse(localStorage.getItem('drivers') || '[]');
         return {
-          data: mockDrivers,
+          data: storedDrivers,
           status: 200,
-          statusText: 'OK (Mocked)',
+          statusText: 'OK (from localStorage)',
+          headers: {},
+          config: {},
+        };
+      } catch (fallbackError) {
+        console.error('Fallback to localStorage failed:', fallbackError);
+        
+        // If all else fails, return an empty array
+        return {
+          data: [],
+          status: 200,
+          statusText: 'OK (empty fallback)',
           headers: {},
           config: {},
         };
       }
-      
-      return {
-        data: storedDrivers,
-        status: 200,
-        statusText: 'OK (Mocked)',
-        headers: {},
-        config: {},
-      };
     }
   },
 

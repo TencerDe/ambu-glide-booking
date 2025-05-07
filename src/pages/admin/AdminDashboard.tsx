@@ -9,17 +9,6 @@ import Footer from '@/components/Footer';
 import { User, Calendar, Clock, MapPin, Phone, Car, FileText, IdCard } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { 
   Table, 
   TableBody, 
   TableCell, 
@@ -27,7 +16,6 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { useForm } from 'react-hook-form';
 
 interface RideRequest {
   id: string;
@@ -73,6 +61,8 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentDriver, setCurrentDriver] = useState<Driver | null>(null);
   const { logout } = useAuth();
   
   const [newDriver, setNewDriver] = useState<DriverFormData>({
@@ -86,57 +76,35 @@ const AdminDashboard = () => {
     address: '',
     vehicleNumber: ''
   });
+  
+  const [editDriver, setEditDriver] = useState<Partial<Driver>>({});
 
   // Fetch data on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const ridesResponse = await adminService.viewRides();
-        setRides(ridesResponse.data);
-        
-        try {
-          // Try to fetch real drivers data
-          const driversResponse = await adminService.viewDrivers();
-          setDrivers(driversResponse.data);
-        } catch (driverError) {
-          console.error('Error fetching drivers:', driverError);
-          // Fallback to dummy data if API fails
-          setDrivers([
-            { 
-              id: '1', 
-              name: 'John Driver', 
-              username: 'john_driver', 
-              is_available: true,
-              phoneNumber: '9876543210',
-              licenseNumber: 'DL12345678',
-              aadhaarNumber: '123456789012',
-              address: '123 Driver St, City',
-              vehicleNumber: 'MH01AB1234'
-            },
-            { 
-              id: '2', 
-              name: 'Sarah Driver', 
-              username: 'sarah_driver', 
-              is_available: false,
-              phoneNumber: '9876543211',
-              licenseNumber: 'DL87654321',
-              aadhaarNumber: '987654321098',
-              address: '456 Driver Ave, Town',
-              vehicleNumber: 'MH02CD5678'
-            },
-          ]);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, []);
+  
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const ridesResponse = await adminService.viewRides();
+      setRides(ridesResponse.data);
+      
+      try {
+        const driversResponse = await adminService.viewDrivers();
+        setDrivers(driversResponse.data);
+      } catch (driverError) {
+        console.error('Error fetching drivers:', driverError);
+        toast.error('Failed to load driver data');
+        setDrivers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDriverInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -148,6 +116,15 @@ const AdminDashboard = () => {
     
     setNewDriver({
       ...newDriver,
+      [name]: value,
+    });
+  };
+  
+  const handleEditDriverInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    
+    setEditDriver({
+      ...editDriver,
       [name]: value,
     });
   };
@@ -188,23 +165,79 @@ const AdminDashboard = () => {
       });
       
       // Refresh the drivers list
-      try {
-        const driversResponse = await adminService.viewDrivers();
-        setDrivers(driversResponse.data);
-      } catch (driverError) {
-        console.error('Error fetching updated drivers:', driverError);
-      }
+      fetchData();
       
     } catch (error: any) {
       console.error('Error creating driver:', error);
-      const errorMessage = error.response?.data?.detail || 
-                         error.response?.data?.message || 
-                         error.response?.data?.error ||
-                         'Failed to create driver';
+      const errorMessage = error.message || 'Failed to create driver';
       toast.error(errorMessage);
     } finally {
       setIsSubmittingDriver(false);
     }
+  };
+  
+  const handleUpdateDriver = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!currentDriver || !editDriver) {
+      toast.error('No driver selected for updating');
+      return;
+    }
+    
+    try {
+      setIsSubmittingDriver(true);
+      console.log('Updating driver data:', editDriver);
+      await adminService.updateDriver(currentDriver.id, editDriver);
+      toast.success('Driver updated successfully');
+      setEditDialogOpen(false);
+      
+      // Reset form
+      setEditDriver({});
+      setCurrentDriver(null);
+      
+      // Refresh the drivers list
+      fetchData();
+      
+    } catch (error: any) {
+      console.error('Error updating driver:', error);
+      const errorMessage = error.message || 'Failed to update driver';
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmittingDriver(false);
+    }
+  };
+  
+  const handleDeleteDriver = async (driverId: string) => {
+    if (!window.confirm('Are you sure you want to delete this driver?')) {
+      return;
+    }
+    
+    try {
+      console.log('Deleting driver:', driverId);
+      await adminService.deleteDriver(driverId);
+      toast.success('Driver deleted successfully');
+      
+      // Refresh the drivers list
+      fetchData();
+      
+    } catch (error: any) {
+      console.error('Error deleting driver:', error);
+      const errorMessage = error.message || 'Failed to delete driver';
+      toast.error(errorMessage);
+    }
+  };
+  
+  const openEditDialog = (driver: Driver) => {
+    setCurrentDriver(driver);
+    setEditDriver({
+      name: driver.name,
+      phoneNumber: driver.phoneNumber,
+      licenseNumber: driver.licenseNumber,
+      address: driver.address,
+      vehicleNumber: driver.vehicleNumber,
+      is_available: driver.is_available
+    });
+    setEditDialogOpen(true);
   };
 
   const handleLogout = () => {
@@ -463,10 +496,20 @@ const AdminDashboard = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm" className="mr-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mr-2"
+                              onClick={() => openEditDialog(driver)}
+                            >
                               Edit
                             </Button>
-                            <Button variant="outline" size="sm" className="text-red-500 border-red-500 hover:bg-red-50">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-red-500 border-red-500 hover:bg-red-50"
+                              onClick={() => handleDeleteDriver(driver.id)}
+                            >
                               Remove
                             </Button>
                           </TableCell>
@@ -506,7 +549,7 @@ const AdminDashboard = () => {
                       {rides.map((ride) => (
                         <TableRow key={ride.id}>
                           <TableCell className="text-sm text-gray-500">
-                            {ride.id.slice(0, 8)}
+                            {typeof ride.id === 'string' ? ride.id.slice(0, 8) : ride.id}
                           </TableCell>
                           <TableCell>
                             <div className="text-sm font-medium text-gray-900">{ride.name}</div>
@@ -559,6 +602,112 @@ const AdminDashboard = () => {
           </div>
         </div>
       </main>
+      
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Edit Driver: {currentDriver?.name}</DialogTitle>
+          </DialogHeader>
+          {currentDriver && (
+            <form onSubmit={handleUpdateDriver} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  id="edit-name"
+                  name="name"
+                  value={editDriver.name || ''}
+                  onChange={handleEditDriverInputChange}
+                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="edit-phoneNumber" className="block text-sm font-medium text-gray-700">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="edit-phoneNumber"
+                  name="phoneNumber"
+                  value={editDriver.phoneNumber || ''}
+                  onChange={handleEditDriverInputChange}
+                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="edit-licenseNumber" className="block text-sm font-medium text-gray-700">
+                  License Number
+                </label>
+                <input
+                  type="text"
+                  id="edit-licenseNumber"
+                  name="licenseNumber"
+                  value={editDriver.licenseNumber || ''}
+                  onChange={handleEditDriverInputChange}
+                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="edit-vehicleNumber" className="block text-sm font-medium text-gray-700">
+                  Vehicle Number
+                </label>
+                <input
+                  type="text"
+                  id="edit-vehicleNumber"
+                  name="vehicleNumber"
+                  value={editDriver.vehicleNumber || ''}
+                  onChange={handleEditDriverInputChange}
+                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="edit-address" className="block text-sm font-medium text-gray-700">
+                  Address
+                </label>
+                <textarea
+                  id="edit-address"
+                  name="address"
+                  value={editDriver.address || ''}
+                  onChange={handleEditDriverInputChange}
+                  rows={3}
+                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                ></textarea>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="edit-is_available"
+                  name="is_available"
+                  checked={editDriver.is_available ?? currentDriver.is_available}
+                  onChange={(e) => setEditDriver({...editDriver, is_available: e.target.checked})}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="edit-is_available" className="ml-2 block text-sm text-gray-900">
+                  Available for rides
+                </label>
+              </div>
+              
+              <div className="flex justify-end pt-4">
+                <Button
+                  type="submit"
+                  className="gradient-bg btn-animate"
+                  disabled={isSubmittingDriver}
+                >
+                  {isSubmittingDriver ? 'Updating...' : 'Update Driver'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
       
       <Footer />
     </div>

@@ -9,7 +9,71 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      driver_credentials: {
+        Row: {
+          driver_id: string
+          password: string
+        }
+        Insert: {
+          driver_id: string
+          password: string
+        }
+        Update: {
+          driver_id?: string
+          password?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_credentials_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: true
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drivers: {
+        Row: {
+          aadhaar_number: string | null
+          address: string | null
+          created_at: string | null
+          id: string
+          is_available: boolean | null
+          license_number: string | null
+          name: string
+          phone_number: string | null
+          updated_at: string | null
+          username: string
+          vehicle_number: string | null
+        }
+        Insert: {
+          aadhaar_number?: string | null
+          address?: string | null
+          created_at?: string | null
+          id?: string
+          is_available?: boolean | null
+          license_number?: string | null
+          name: string
+          phone_number?: string | null
+          updated_at?: string | null
+          username: string
+          vehicle_number?: string | null
+        }
+        Update: {
+          aadhaar_number?: string | null
+          address?: string | null
+          created_at?: string | null
+          id?: string
+          is_available?: boolean | null
+          license_number?: string | null
+          name?: string
+          phone_number?: string | null
+          updated_at?: string | null
+          username?: string
+          vehicle_number?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
