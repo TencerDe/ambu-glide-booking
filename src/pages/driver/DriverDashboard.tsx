@@ -3,68 +3,120 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { driverService } from '@/services/driverService';
-import { driverNotificationsSocket, useWebSocket } from '@/services/websocketService';
+import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { Bell, Clock, MapPin, Calendar, User } from 'lucide-react';
+import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface RideRequest {
   id: string;
   name: string;
   address: string;
   age: number;
-  ambulanceType: string;
-  vehicleType: string;
+  ambulance_type: string;
+  vehicle_type: string;
   notes?: string;
-  createdAt: string;
-  status: 'pending' | 'accepted' | 'en_route' | 'completed';
+  created_at: string;
+  status: string;
+  hospital: string;
+  charge: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [socketStatus, setSocketStatus] = useState<string>('disconnected');
+  const [driverProfile, setDriverProfile] = useState<any>(null);
   const { logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Handle WebSocket messages
-  const handleWebSocketMessage = (message: any) => {
-    if (message.type === 'new_ride_request') {
-      toast.info('New ride request received!');
-      
-      // Add the new request to the state
-      setRideRequests(prev => [message.ride_request, ...prev]);
-    } else if (message.type === 'ride_accepted') {
-      // Remove the accepted ride from the list for other drivers
-      setRideRequests(prev => prev.filter(ride => ride.id !== message.ride_id));
-      toast.info(`Ride #${message.ride_id.slice(0, 8)} has been accepted by another driver`);
-    }
-  };
-
-  // Setup WebSocket connection
-  useWebSocket(
-    driverNotificationsSocket,
-    handleWebSocketMessage,
-    (status) => setSocketStatus(status)
-  );
-
-  // Fetch initial ride requests on component mount
+  // Fetch initial ride requests and driver profile on component mount
   useEffect(() => {
-    const fetchRideRequests = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await driverService.getRideRequests();
-        setRideRequests(response.data);
+        
+        // Get driver profile
+        const profileResponse = await driverService.getDriverProfile();
+        setDriverProfile(profileResponse.data);
+        
+        // Get ride requests
+        const rideResponse = await driverService.getRideRequests();
+        setRideRequests(rideResponse.data);
       } catch (error) {
-        console.error('Error fetching ride requests:', error);
-        toast.error('Failed to load ride requests');
+        console.error('Error fetching data:', error);
+        toast.error('Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRideRequests();
+    fetchData();
   }, []);
+
+  // Set up real-time subscription for ride requests
+  useEffect(() => {
+    // Subscribe to changes in the ride_requests table
+    const channel = supabase
+      .channel('ride-requests-changes')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'ride_requests',
+          filter: 'status=eq.pending'
+        }, 
+        (payload) => {
+          console.log('New ride request received:', payload);
+          const newRide = payload.new as RideRequest;
+          
+          // Add the new ride request to the state
+          setRideRequests(current => [newRide, ...current]);
+          
+          // Show notification
+          toast.info('New ride request received!', {
+            description: `From: ${newRide.address}`
+          });
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ride_requests'
+        },
+        (payload) => {
+          console.log('Ride request updated:', payload);
+          const updatedRide = payload.new as RideRequest;
+          
+          // If the ride was accepted by another driver, remove it from the list
+          if (updatedRide.status !== 'pending') {
+            setRideRequests(current => 
+              current.filter(ride => ride.id !== updatedRide.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+    
+    // Cleanup subscription on component unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Check if user is authenticated as driver
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    
+    if (!token || role !== 'driver') {
+      navigate('/driver/login');
+    }
+  }, [navigate]);
 
   const handleAcceptRide = async (rideId: string) => {
     try {
@@ -74,12 +126,6 @@ const DriverDashboard = () => {
       setRideRequests(prev => prev.filter(ride => ride.id !== rideId));
       
       toast.success('Ride accepted successfully!');
-      
-      // Notify WebSocket about the acceptance
-      driverNotificationsSocket.sendMessage({
-        type: 'accept_ride',
-        ride_id: rideId
-      });
     } catch (error) {
       console.error('Error accepting ride:', error);
       toast.error('Failed to accept ride');
@@ -89,6 +135,7 @@ const DriverDashboard = () => {
   const handleLogout = () => {
     driverService.logout();
     logout();
+    navigate('/driver/login');
   };
 
   return (
@@ -99,27 +146,51 @@ const DriverDashboard = () => {
         <div className="container mx-auto">
           <div className="bg-white rounded-xl shadow-md p-6 mb-8">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-800">Driver Dashboard</h1>
-              <div className="flex items-center gap-4">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
-                  socketStatus === 'connected' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full mr-2 ${
-                    socketStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
-                  }`}></span>
-                  {socketStatus === 'connected' ? 'Online' : 'Offline'}
-                </span>
-                <Button 
-                  variant="outline" 
-                  className="flex items-center gap-2" 
-                  onClick={handleLogout}
-                >
-                  Logout
-                </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">Driver Dashboard</h1>
+                {driverProfile && (
+                  <p className="text-gray-600">Welcome, {driverProfile.name}</p>
+                )}
               </div>
+              <Button 
+                variant="outline" 
+                className="flex items-center gap-2" 
+                onClick={handleLogout}
+              >
+                Logout
+              </Button>
             </div>
+            
+            {/* Driver Information */}
+            {driverProfile && (
+              <div className="mb-8 p-4 border rounded-lg bg-gray-50">
+                <h2 className="text-lg font-semibold mb-3">Driver Information</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Username</p>
+                    <p className="font-medium">{driverProfile.username}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Status</p>
+                    <p className={`font-medium ${driverProfile.is_available ? 'text-green-600' : 'text-red-600'}`}>
+                      {driverProfile.is_available ? 'Available' : 'Busy'}
+                    </p>
+                  </div>
+                  {driverProfile.phone_number && (
+                    <div>
+                      <p className="text-sm text-gray-500">Phone Number</p>
+                      <p className="font-medium">{driverProfile.phone_number}</p>
+                    </div>
+                  )}
+                  {driverProfile.license_number && (
+                    <div>
+                      <p className="text-sm text-gray-500">License Number</p>
+                      <p className="font-medium">{driverProfile.license_number}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             <div className="mb-8">
               <h2 className="flex items-center text-xl font-semibold mb-4">
@@ -154,21 +225,29 @@ const DriverDashboard = () => {
                           <span>{request.address}</span>
                         </p>
                         <p className="flex items-center">
+                          <Building className="w-4 h-4 mr-2" />
+                          <span>Hospital: {request.hospital}</span>
+                        </p>
+                        <p className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2" />
-                          <span>{new Date(request.createdAt).toLocaleDateString()}</span>
+                          <span>{new Date(request.created_at).toLocaleDateString()}</span>
                         </p>
                         <p className="flex items-center">
                           <Clock className="w-4 h-4 mr-2" />
-                          <span>{new Date(request.createdAt).toLocaleTimeString()}</span>
+                          <span>{new Date(request.created_at).toLocaleTimeString()}</span>
+                        </p>
+                        <p className="flex items-center">
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          <span className="font-medium">₹{request.charge.toLocaleString()}</span>
                         </p>
                       </div>
                       
                       <div>
                         <p className="text-sm mb-1">
-                          <span className="font-medium">Ambulance Type:</span> {request.ambulanceType}
+                          <span className="font-medium">Ambulance Type:</span> {request.ambulance_type}
                         </p>
                         <p className="text-sm mb-1">
-                          <span className="font-medium">Vehicle Type:</span> {request.vehicleType}
+                          <span className="font-medium">Vehicle Type:</span> {request.vehicle_type}
                         </p>
                         <p className="text-sm">
                           <span className="font-medium">Age:</span> {request.age}
@@ -184,7 +263,7 @@ const DriverDashboard = () => {
                         className="w-full mt-4 gradient-bg btn-animate"
                         onClick={() => handleAcceptRide(request.id)}
                       >
-                        Accept Ride
+                        Accept Ride (₹{request.charge.toLocaleString()})
                       </Button>
                     </div>
                   ))}

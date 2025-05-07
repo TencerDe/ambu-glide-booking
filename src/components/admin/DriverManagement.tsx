@@ -1,18 +1,18 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { Plus, PencilIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { adminService } from '@/services/adminService';
-import { User, Phone, FileText, IdCard, Car } from 'lucide-react';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
 
 interface Driver {
   id: string;
@@ -24,18 +24,7 @@ interface Driver {
   aadhaarNumber?: string;
   address?: string;
   vehicleNumber?: string;
-}
-
-interface DriverFormData {
-  name: string;
-  username: string;
-  password: string;
-  email: string;
-  phoneNumber: string;
-  aadhaarNumber: string;
-  licenseNumber: string;
-  address: string;
-  vehicleNumber: string;
+  password?: string; // Added for form handling
 }
 
 interface DriverManagementProps {
@@ -44,326 +33,139 @@ interface DriverManagementProps {
   onDriversChanged: () => void;
 }
 
-const DriverManagement: React.FC<DriverManagementProps> = ({ drivers, loading, onDriversChanged }) => {
-  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+const DriverManagement: React.FC<DriverManagementProps> = ({ 
+  drivers, 
+  loading, 
+  onDriversChanged 
+}) => {
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
   const [currentDriver, setCurrentDriver] = useState<Driver | null>(null);
-  
-  const [newDriver, setNewDriver] = useState<DriverFormData>({
+  const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
+  const [formData, setFormData] = useState<Driver>({
+    id: '',
     name: '',
     username: '',
-    password: '',
-    email: '',
+    is_available: true,
     phoneNumber: '',
-    aadhaarNumber: '',
     licenseNumber: '',
+    aadhaarNumber: '',
     address: '',
-    vehicleNumber: ''
+    vehicleNumber: '',
+    password: '', // Added password field
   });
-  
-  const [editDriver, setEditDriver] = useState<Partial<Driver>>({});
 
-  const handleDriverInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    // For Aadhaar number, only allow numerical input
-    if (name === 'aadhaarNumber' && !/^\d*$/.test(value)) {
-      return;
-    }
-    
-    setNewDriver({
-      ...newDriver,
-      [name]: value,
-    });
-  };
-  
-  const handleEditDriverInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    setEditDriver({
-      ...editDriver,
-      [name]: value,
+  const resetFormData = () => {
+    setFormData({
+      id: '',
+      name: '',
+      username: '',
+      is_available: true,
+      phoneNumber: '',
+      licenseNumber: '',
+      aadhaarNumber: '',
+      address: '',
+      vehicleNumber: '',
+      password: '', // Reset password too
     });
   };
 
-  const handleCreateDriver = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (!newDriver.name || !newDriver.username || !newDriver.password) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    
-    // Validation for Aadhaar number (12 digits)
-    if (newDriver.aadhaarNumber && newDriver.aadhaarNumber.length !== 12) {
-      toast.error('Aadhaar number must be exactly 12 digits');
-      return;
-    }
-    
-    try {
-      setIsSubmittingDriver(true);
-      console.log('Submitting driver data:', newDriver);
-      const response = await adminService.createDriver(newDriver);
-      console.log('Create driver response:', response);
-      toast.success('Driver created successfully');
-      setDialogOpen(false);
-      
-      // Reset form
-      setNewDriver({
-        name: '',
-        username: '',
-        password: '',
-        email: '',
-        phoneNumber: '',
-        aadhaarNumber: '',
-        licenseNumber: '',
-        address: '',
-        vehicleNumber: ''
-      });
-      
-      // Refresh the drivers list
-      onDriversChanged();
-      
-    } catch (error: any) {
-      console.error('Error creating driver:', error);
-      const errorMessage = error.message || 'Failed to create driver';
-      toast.error(errorMessage);
-    } finally {
-      setIsSubmittingDriver(false);
-    }
+  const handleAddDriver = () => {
+    setCurrentDriver(null);
+    resetFormData();
+    setIsDialogOpen(true);
   };
-  
-  const handleUpdateDriver = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (!currentDriver || !editDriver) {
-      toast.error('No driver selected for updating');
-      return;
-    }
-    
-    try {
-      setIsSubmittingDriver(true);
-      console.log('Updating driver data:', editDriver);
-      await adminService.updateDriver(currentDriver.id, editDriver);
-      toast.success('Driver updated successfully');
-      setEditDialogOpen(false);
-      
-      // Reset form
-      setEditDriver({});
-      setCurrentDriver(null);
-      
-      // Refresh the drivers list
-      onDriversChanged();
-      
-    } catch (error: any) {
-      console.error('Error updating driver:', error);
-      const errorMessage = error.message || 'Failed to update driver';
-      toast.error(errorMessage);
-    } finally {
-      setIsSubmittingDriver(false);
-    }
-  };
-  
-  const handleDeleteDriver = async (driverId: string) => {
-    if (!window.confirm('Are you sure you want to delete this driver?')) {
-      return;
-    }
-    
-    try {
-      console.log('Deleting driver:', driverId);
-      await adminService.deleteDriver(driverId);
-      toast.success('Driver deleted successfully');
-      
-      // Refresh the drivers list
-      onDriversChanged();
-      
-    } catch (error: any) {
-      console.error('Error deleting driver:', error);
-      const errorMessage = error.message || 'Failed to delete driver';
-      toast.error(errorMessage);
-    }
-  };
-  
-  const openEditDialog = (driver: Driver) => {
+
+  const handleEditDriver = (driver: Driver) => {
     setCurrentDriver(driver);
-    setEditDriver({
-      name: driver.name,
-      phoneNumber: driver.phoneNumber,
-      licenseNumber: driver.licenseNumber,
-      address: driver.address,
-      vehicleNumber: driver.vehicleNumber,
-      is_available: driver.is_available
+    setFormData({
+      ...driver,
+      password: '', // Don't prefill password on edit
     });
-    setEditDialogOpen(true);
+    setIsDialogOpen(true);
+  };
+
+  const handleDeletePrompt = (driver: Driver) => {
+    setDriverToDelete(driver);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    // Handle checkbox for is_available
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData({
+        ...formData,
+        [name]: checked
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Validation
+      if (!formData.name || !formData.username) {
+        toast.error('Name and username are required');
+        return;
+      }
+      
+      // For new driver, password is required
+      if (!currentDriver && !formData.password) {
+        toast.error('Password is required for new drivers');
+        return;
+      }
+      
+      if (currentDriver) {
+        // Update existing driver
+        await adminService.updateDriver({
+          ...formData,
+          id: currentDriver.id
+        });
+        toast.success('Driver updated successfully');
+      } else {
+        // Add new driver
+        await adminService.addDriver(formData);
+        toast.success('Driver added successfully');
+      }
+      
+      setIsDialogOpen(false);
+      onDriversChanged();
+    } catch (error) {
+      console.error('Error saving driver:', error);
+      toast.error('Failed to save driver');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!driverToDelete) return;
+    
+    try {
+      await adminService.deleteDriver(driverToDelete.id);
+      toast.success('Driver deleted successfully');
+      setIsDeleteDialogOpen(false);
+      onDriversChanged();
+    } catch (error) {
+      console.error('Error deleting driver:', error);
+      toast.error('Failed to delete driver');
+    }
   };
 
   return (
-    <div className="mb-8">
+    <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Drivers</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gradient-bg btn-animate">Add New Driver</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle>Create Driver Account</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreateDriver} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={newDriver.name}
-                  onChange={handleDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  required
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                    Username *
-                  </label>
-                  <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    value={newDriver.username}
-                    onChange={handleDriverInputChange}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    Password *
-                  </label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={newDriver.password}
-                    onChange={handleDriverInputChange}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={newDriver.email}
-                    onChange={handleDriverInputChange}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="tel"
-                    id="phoneNumber"
-                    name="phoneNumber"
-                    value={newDriver.phoneNumber}
-                    onChange={handleDriverInputChange}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="aadhaarNumber" className="block text-sm font-medium text-gray-700">
-                    Aadhaar Number * (12 digits)
-                  </label>
-                  <input
-                    type="text"
-                    id="aadhaarNumber"
-                    name="aadhaarNumber"
-                    value={newDriver.aadhaarNumber}
-                    onChange={handleDriverInputChange}
-                    maxLength={12}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="licenseNumber" className="block text-sm font-medium text-gray-700">
-                    License Number *
-                  </label>
-                  <input
-                    type="text"
-                    id="licenseNumber"
-                    name="licenseNumber"
-                    value={newDriver.licenseNumber}
-                    onChange={handleDriverInputChange}
-                    className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                  Address *
-                </label>
-                <textarea
-                  id="address"
-                  name="address"
-                  value={newDriver.address}
-                  onChange={handleDriverInputChange}
-                  rows={3}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  required
-                ></textarea>
-              </div>
-              
-              <div>
-                <label htmlFor="vehicleNumber" className="block text-sm font-medium text-gray-700">
-                  Vehicle Number *
-                </label>
-                <input
-                  type="text"
-                  id="vehicleNumber"
-                  name="vehicleNumber"
-                  value={newDriver.vehicleNumber}
-                  onChange={handleDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  required
-                />
-              </div>
-              
-              <div className="flex justify-end pt-4">
-                <Button
-                  type="submit"
-                  className="gradient-bg btn-animate"
-                  disabled={isSubmittingDriver}
-                >
-                  {isSubmittingDriver ? 'Creating...' : 'Create Driver'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <h2 className="text-xl font-semibold">Driver Management</h2>
+        <Button onClick={handleAddDriver} className="flex items-center">
+          <Plus className="h-4 w-4 mr-2" /> Add Driver
+        </Button>
       </div>
       
       {loading ? (
@@ -372,197 +174,219 @@ const DriverManagement: React.FC<DriverManagementProps> = ({ drivers, loading, o
         </div>
       ) : drivers.length > 0 ? (
         <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Driver Info</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Documents</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 text-gray-700 uppercase text-xs">
+              <tr>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Username</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Phone</th>
+                <th className="px-4 py-3">License Number</th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {drivers.map((driver) => (
-                <TableRow key={driver.id}>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <User className="h-5 w-5 text-gray-500" />
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{driver.name}</div>
-                        <div className="text-xs text-gray-500">@{driver.username}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center text-sm text-gray-500">
-                      <Phone className="h-4 w-4 mr-1" /> 
-                      {driver.phoneNumber}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {driver.address}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center text-sm text-gray-500">
-                      <FileText className="h-4 w-4 mr-1" /> 
-                      {driver.licenseNumber}
-                    </div>
-                    <div className="flex items-center text-sm text-gray-500 mt-1">
-                      <IdCard className="h-4 w-4 mr-1" />
-                      {driver.aadhaarNumber}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center text-sm text-gray-500">
-                      <Car className="h-4 w-4 mr-1" /> 
-                      {driver.vehicleNumber}
-                    </div>
-                  </TableCell>
-                  <TableCell>
+                <tr key={driver.id} className="border-b hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium">{driver.name}</td>
+                  <td className="px-4 py-3">{driver.username}</td>
+                  <td className="px-4 py-3">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      driver.is_available 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                      driver.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {driver.is_available ? 'Available' : 'Unavailable'}
                     </span>
-                  </TableCell>
-                  <TableCell>
+                  </td>
+                  <td className="px-4 py-3">{driver.phoneNumber || '-'}</td>
+                  <td className="px-4 py-3">{driver.licenseNumber || '-'}</td>
+                  <td className="px-4 py-3">
                     <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mr-2"
-                      onClick={() => openEditDialog(driver)}
+                      variant="ghost" 
+                      className="h-8 w-8 p-0 mr-1"
+                      onClick={() => handleEditDriver(driver)}
                     >
-                      Edit
+                      <PencilIcon className="h-4 w-4" />
                     </Button>
                     <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-red-500 border-red-500 hover:bg-red-50"
-                      onClick={() => handleDeleteDriver(driver.id)}
+                      variant="ghost" 
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                      onClick={() => handleDeletePrompt(driver)}
                     >
-                      Remove
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <p className="text-gray-500">No drivers registered yet.</p>
+          <p className="text-gray-500">No drivers found. Add your first driver using the button above.</p>
         </div>
       )}
-
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[550px]">
+      
+      {/* Add/Edit Driver Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Driver: {currentDriver?.name}</DialogTitle>
+            <DialogTitle>{currentDriver ? 'Edit Driver' : 'Add New Driver'}</DialogTitle>
+            <DialogDescription>
+              {currentDriver 
+                ? 'Update the driver information below'
+                : 'Fill in the details to add a new driver'
+              }
+            </DialogDescription>
           </DialogHeader>
-          {currentDriver && (
-            <form onSubmit={handleUpdateDriver} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
-              <div>
-                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700">
-                  Full Name
+          
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Name *
                 </label>
-                <input
-                  type="text"
-                  id="edit-name"
+                <Input
+                  id="name"
                   name="name"
-                  value={editDriver.name || ''}
-                  onChange={handleEditDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={formData.name}
+                  onChange={handleInputChange}
                   required
                 />
               </div>
               
-              <div>
-                <label htmlFor="edit-phoneNumber" className="block text-sm font-medium text-gray-700">
+              <div className="grid gap-2">
+                <label htmlFor="username" className="text-sm font-medium">
+                  Username *
+                </label>
+                <Input
+                  id="username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              
+              {/* Password field - always show for new drivers, optional for edits */}
+              <div className="grid gap-2">
+                <label htmlFor="password" className="text-sm font-medium">
+                  Password {currentDriver ? '(Leave blank to keep current)' : '*'}
+                </label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required={!currentDriver}
+                />
+              </div>
+              
+              <div className="grid gap-2">
+                <label htmlFor="phoneNumber" className="text-sm font-medium">
                   Phone Number
                 </label>
-                <input
-                  type="tel"
-                  id="edit-phoneNumber"
+                <Input
+                  id="phoneNumber"
                   name="phoneNumber"
-                  value={editDriver.phoneNumber || ''}
-                  onChange={handleEditDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={formData.phoneNumber || ''}
+                  onChange={handleInputChange}
                 />
               </div>
               
-              <div>
-                <label htmlFor="edit-licenseNumber" className="block text-sm font-medium text-gray-700">
+              <div className="grid gap-2">
+                <label htmlFor="licenseNumber" className="text-sm font-medium">
                   License Number
                 </label>
-                <input
-                  type="text"
-                  id="edit-licenseNumber"
+                <Input
+                  id="licenseNumber"
                   name="licenseNumber"
-                  value={editDriver.licenseNumber || ''}
-                  onChange={handleEditDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={formData.licenseNumber || ''}
+                  onChange={handleInputChange}
                 />
               </div>
               
-              <div>
-                <label htmlFor="edit-vehicleNumber" className="block text-sm font-medium text-gray-700">
+              <div className="grid gap-2">
+                <label htmlFor="aadhaarNumber" className="text-sm font-medium">
+                  Aadhaar Number
+                </label>
+                <Input
+                  id="aadhaarNumber"
+                  name="aadhaarNumber"
+                  value={formData.aadhaarNumber || ''}
+                  onChange={handleInputChange}
+                />
+              </div>
+              
+              <div className="grid gap-2">
+                <label htmlFor="vehicleNumber" className="text-sm font-medium">
                   Vehicle Number
                 </label>
-                <input
-                  type="text"
-                  id="edit-vehicleNumber"
+                <Input
+                  id="vehicleNumber"
                   name="vehicleNumber"
-                  value={editDriver.vehicleNumber || ''}
-                  onChange={handleEditDriverInputChange}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={formData.vehicleNumber || ''}
+                  onChange={handleInputChange}
                 />
               </div>
               
-              <div>
-                <label htmlFor="edit-address" className="block text-sm font-medium text-gray-700">
+              <div className="grid gap-2">
+                <label htmlFor="address" className="text-sm font-medium">
                   Address
                 </label>
-                <textarea
-                  id="edit-address"
+                <Input
+                  id="address"
                   name="address"
-                  value={editDriver.address || ''}
-                  onChange={handleEditDriverInputChange}
-                  rows={3}
-                  className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                ></textarea>
+                  value={formData.address || ''}
+                  onChange={handleInputChange}
+                />
               </div>
               
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="edit-is_available"
+                  id="is_available"
                   name="is_available"
-                  checked={editDriver.is_available ?? currentDriver.is_available}
-                  onChange={(e) => setEditDriver({...editDriver, is_available: e.target.checked})}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  checked={formData.is_available}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 rounded border-gray-300"
                 />
-                <label htmlFor="edit-is_available" className="ml-2 block text-sm text-gray-900">
-                  Available for rides
+                <label htmlFor="is_available" className="text-sm font-medium">
+                  Available for duty
                 </label>
               </div>
-              
-              <div className="flex justify-end pt-4">
-                <Button
-                  type="submit"
-                  className="gradient-bg btn-animate"
-                  disabled={isSubmittingDriver}
-                >
-                  {isSubmittingDriver ? 'Updating...' : 'Update Driver'}
-                </Button>
-              </div>
-            </form>
-          )}
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {currentDriver ? 'Update' : 'Add'} Driver
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the driver "{driverToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              Delete Driver
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

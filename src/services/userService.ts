@@ -1,5 +1,6 @@
 
 import api from './api';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define profile data type for TypeScript
 interface ProfileData {
@@ -7,6 +8,17 @@ interface ProfileData {
   age?: number;
   preferredHospital?: string;
   healthIssues?: string[];
+}
+
+// Define booking data type
+interface BookingData {
+  name: string;
+  address: string;
+  age: number;
+  ambulanceType: string;
+  vehicleType: string;
+  notes?: string;
+  hospital?: string;
 }
 
 export const userService = {
@@ -31,15 +43,43 @@ export const userService = {
     return { data: profileData };
   },
 
-  bookRide: async (bookingData: {
-    name: string;
-    address: string;
-    age: number;
-    ambulanceType: string;
-    vehicleType: string;
-    notes?: string;
-  }) => {
-    return api.post('/api/book-ride/', bookingData);
+  bookRide: async (bookingData: BookingData) => {
+    try {
+      // Fixed charge of 5000 rupees for testing
+      const charge = 5000;
+      
+      // Create a ride request in Supabase
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .insert([
+          {
+            name: bookingData.name,
+            address: bookingData.address,
+            age: bookingData.age,
+            ambulance_type: bookingData.ambulanceType,
+            vehicle_type: bookingData.vehicleType,
+            notes: bookingData.notes || '',
+            hospital: bookingData.hospital || 'Not specified',
+            status: 'pending',
+            charge: charge,
+            latitude: 0, // These should be replaced with actual coordinates
+            longitude: 0,
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+      
+      if (error) {
+        console.error('Error booking ride:', error);
+        throw error;
+      }
+      
+      return { data };
+    } catch (error) {
+      console.error('Error in bookRide:', error);
+      // Fallback to the API for demo purposes
+      return api.post('/api/book-ride/', bookingData);
+    }
   },
 
   logout: () => {

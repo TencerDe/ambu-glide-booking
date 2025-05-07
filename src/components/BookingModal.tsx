@@ -18,7 +18,21 @@ interface FormData {
   ambulanceType: string;
   vehicleType: string;
   notes: string;
+  hospital: string; // Added hospital field
 }
+
+// List of hospitals for selection
+const HOSPITALS = [
+  "Apollo Hospital",
+  "AIIMS Hospital",
+  "Max Healthcare",
+  "Fortis Hospital",
+  "Manipal Hospital",
+  "Medanta Hospital",
+  "Narayana Health",
+  "Columbia Asia Hospital",
+  "Other"
+];
 
 const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, address }) => {
   const [formData, setFormData] = useState<FormData>({
@@ -28,6 +42,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     ambulanceType: 'With Medical Assistance',
     vehicleType: 'Van',
     notes: '',
+    hospital: '', // Initialize hospital field
   });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -53,7 +68,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     e.preventDefault();
     
     // Form validation
-    if (!formData.name || !formData.address || !formData.age) {
+    if (!formData.name || !formData.address || !formData.age || !formData.hospital) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -141,6 +156,31 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
             />
           </div>
           
+          {/* Added Hospital Selection */}
+          <div>
+            <label htmlFor="hospital" className="block text-sm font-medium text-gray-700">
+              Hospital *
+            </label>
+            <select
+              id="hospital"
+              name="hospital"
+              value={formData.hospital}
+              onChange={handleChange}
+              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            >
+              <option value="" disabled>Select a hospital</option>
+              {HOSPITALS.map((hospital) => (
+                <option key={hospital} value={hospital}>
+                  {hospital}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Fixed charge of ₹5,000 for ambulance service
+            </p>
+          </div>
+          
           <div>
             <label htmlFor="ambulanceType" className="block text-sm font-medium text-gray-700">
               Ambulance Type *
@@ -202,7 +242,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
               className="px-4 py-2 gradient-bg text-white btn-animate"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Booking...' : 'Book Now'}
+              {isSubmitting ? 'Booking...' : 'Book Now (₹5,000)'}
             </Button>
           </div>
         </form>

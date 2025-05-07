@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -19,6 +19,16 @@ const DriverLogin = () => {
   const location = useLocation();
   
   const from = (location.state as any)?.from?.pathname || '/driver/dashboard';
+
+  // Check if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    
+    if (token && role === 'driver') {
+      navigate('/driver/dashboard');
+    }
+  }, [navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -40,13 +50,16 @@ const DriverLogin = () => {
     try {
       setIsSubmitting(true);
       const response = await driverService.login(formData);
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('role', 'driver');
-      toast.success('Logged in as Driver');
-      navigate(from);
+      
+      if (response.data && response.data.token) {
+        toast.success(`Welcome, ${response.data.driver?.name || 'Driver'}`);
+        navigate(from);
+      } else {
+        toast.error('Login failed. Invalid response received.');
+      }
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error(error.response?.data?.message || 'Login failed. Please check your credentials.');
+      toast.error(error.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }
