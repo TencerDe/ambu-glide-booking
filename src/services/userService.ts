@@ -93,15 +93,12 @@ export const userService = {
       
       console.log('Sending ride data to Supabase:', rideData);
       
-      // Direct Supabase insert for better error handling
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .insert([rideData])
-        .select();
+      // Use insertItems utility function that makes direct REST API call to Supabase
+      const data = await insertItems('ride_requests', rideData);
       
-      if (error) {
-        console.error('Error in bookRide Supabase insertion:', error);
-        throw new Error(error.message || 'Failed to book ambulance');
+      if (!data) {
+        console.error('Error in bookRide: No data returned from insertion');
+        throw new Error('Failed to book ambulance');
       }
       
       console.log('Booking successful, response:', data);
