@@ -54,17 +54,26 @@ export const userService = {
       // Get current coordinates from localStorage if available, otherwise use placeholders
       let latitude = 0;
       let longitude = 0;
-      const locationData = localStorage.getItem('userLocation');
       
-      if (locationData) {
-        try {
-          const location = JSON.parse(locationData);
-          latitude = location.lat || 0;
-          longitude = location.lng || 0;
-        } catch (error) {
-          console.warn('Failed to parse location from localStorage:', error);
+      // Try multiple keys for location data since there might be inconsistency
+      const locationKeys = ['userLocation', 'currentLocation'];
+      
+      for (const key of locationKeys) {
+        const locationData = localStorage.getItem(key);
+        if (locationData) {
+          try {
+            const location = JSON.parse(locationData);
+            latitude = location.lat || 0;
+            longitude = location.lng || 0;
+            console.log(`Found location data in ${key}:`, location);
+            break; // Exit loop once valid location is found
+          } catch (error) {
+            console.warn(`Failed to parse location from ${key}:`, error);
+          }
         }
       }
+      
+      console.log('Using coordinates:', { latitude, longitude });
       
       // Create a ride request using our utility function
       const rideData = {
@@ -84,7 +93,11 @@ export const userService = {
       
       console.log('Sending ride data to Supabase:', rideData);
       
-      const { data, error } = await insertItems('ride_requests', [rideData]);
+      // Direct Supabase insert for better error handling
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .insert([rideData])
+        .select();
       
       if (error) {
         console.error('Error in bookRide Supabase insertion:', error);
@@ -94,12 +107,15 @@ export const userService = {
       console.log('Booking successful, response:', data);
       return { data };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in bookRide:', error);
       
-      // Fallback to the API for demo purposes
-      console.log('Falling back to API');
-      return api.post('/api/book-ride/', bookingData);
+      // More detailed error message
+      const errorMessage = error?.message || 'Network error occurred while booking ambulance';
+      console.error('Error details:', errorMessage);
+      
+      // Return a structured error response instead of using the API fallback
+      throw new Error(errorMessage);
     }
   },
 

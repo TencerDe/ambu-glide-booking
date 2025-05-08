@@ -82,19 +82,24 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     try {
       setIsSubmitting(true);
       
-      // Get location from local storage if available
+      // Ensure consistent location storage
       const locationString = localStorage.getItem('currentLocation');
       if (locationString) {
         try {
           const location = JSON.parse(locationString);
-          // Store the location for booking
-          localStorage.setItem('userLocation', JSON.stringify({
+          // Store the location in both keys to ensure it's found
+          const locationData = {
             lat: location.lat,
             lng: location.lng
-          }));
+          };
+          
+          localStorage.setItem('userLocation', JSON.stringify(locationData));
+          console.log('Stored location data before booking:', locationData);
         } catch (error) {
           console.warn('Failed to parse location from localStorage:', error);
         }
+      } else {
+        console.warn('No location data found in localStorage before booking');
       }
       
       // Convert age to number for the API call
