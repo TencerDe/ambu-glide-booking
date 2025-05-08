@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -49,11 +48,16 @@ const BookAmbulance = () => {
             const { latitude, longitude } = position.coords;
             
             // Set the current location first with a placeholder address
-            setCurrentLocation({
+            const locationData = {
               lat: latitude,
               lng: longitude,
               address: "Loading address..."
-            });
+            };
+            
+            setCurrentLocation(locationData);
+            
+            // Save location to localStorage
+            localStorage.setItem('currentLocation', JSON.stringify(locationData));
             
             // Initialize map
             initMap(latitude, longitude);
@@ -248,33 +252,46 @@ const BookAmbulance = () => {
 
   const getAddressFromCoords = (lat: number, lng: number) => {
     // First update the coordinates
-    setCurrentLocation(prev => {
-      return {
-        lat,
-        lng,
-        address: prev?.address || "Loading address..."
-      };
-    });
+    const locationData = {
+      lat,
+      lng,
+      address: currentLocation?.address || "Loading address..."
+    };
+    
+    setCurrentLocation(locationData);
+    
+    // Save to localStorage
+    localStorage.setItem('currentLocation', JSON.stringify(locationData));
     
     // Now use the Google Maps Geocoding API to get the address
     if (window.google && window.google.maps) {
       const geocoder = geocoderRef.current || new window.google.maps.Geocoder();
       geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
         if (status === "OK" && results && results[0]) {
-          setCurrentLocation({
+          const updatedLocation = {
             lat,
             lng,
             address: results[0].formatted_address
-          });
+          };
+          
+          setCurrentLocation(updatedLocation);
           setSearchAddress(results[0].formatted_address);
+          
+          // Update localStorage with the address
+          localStorage.setItem('currentLocation', JSON.stringify(updatedLocation));
         } else {
           console.error("Geocoder failed due to: " + status);
           toast.error("Failed to retrieve address. Please enter it manually.");
-          setCurrentLocation({
+          const fallbackLocation = {
             lat, 
             lng,
             address: `Latitude: ${lat.toFixed(6)}, Longitude: ${lng.toFixed(6)}`
-          });
+          };
+          
+          setCurrentLocation(fallbackLocation);
+          
+          // Save fallback to localStorage
+          localStorage.setItem('currentLocation', JSON.stringify(fallbackLocation));
         }
       });
     }
@@ -309,13 +326,17 @@ const BookAmbulance = () => {
         }
         
         // Update currentLocation state
-        setCurrentLocation({
+        const newLocation = {
           lat,
           lng,
           address: results[0].formatted_address
-        });
+        };
         
+        setCurrentLocation(newLocation);
         setSearchAddress(results[0].formatted_address);
+        
+        // Save to localStorage
+        localStorage.setItem('currentLocation', JSON.stringify(newLocation));
       } else {
         toast.error("Could not find this address. Please try a different one.");
       }

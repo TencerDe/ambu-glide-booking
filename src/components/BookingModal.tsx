@@ -82,8 +82,23 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     try {
       setIsSubmitting(true);
       
+      // Get location from local storage if available
+      const locationString = localStorage.getItem('currentLocation');
+      if (locationString) {
+        try {
+          const location = JSON.parse(locationString);
+          // Store the location for booking
+          localStorage.setItem('userLocation', JSON.stringify({
+            lat: location.lat,
+            lng: location.lng
+          }));
+        } catch (error) {
+          console.warn('Failed to parse location from localStorage:', error);
+        }
+      }
+      
       // Convert age to number for the API call
-      await userService.bookRide({
+      const response = await userService.bookRide({
         ...formData,
         age: ageNumber,
       });
@@ -94,7 +109,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
       onBookingSuccess();
     } catch (error: any) {
       console.error('Error booking ambulance:', error);
-      toast.error(error.response?.data?.message || 'Failed to book ambulance. Please try again.');
+      toast.error(error.message || 'Failed to book ambulance. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

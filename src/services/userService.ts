@@ -46,11 +46,28 @@ export const userService = {
 
   bookRide: async (bookingData: BookingData) => {
     try {
+      console.log('Booking data received:', bookingData);
+      
       // Fixed charge of 5000 rupees for testing
       const charge = 5000;
       
+      // Get current coordinates from localStorage if available, otherwise use placeholders
+      let latitude = 0;
+      let longitude = 0;
+      const locationData = localStorage.getItem('userLocation');
+      
+      if (locationData) {
+        try {
+          const location = JSON.parse(locationData);
+          latitude = location.lat || 0;
+          longitude = location.lng || 0;
+        } catch (error) {
+          console.warn('Failed to parse location from localStorage:', error);
+        }
+      }
+      
       // Create a ride request using our utility function
-      const data = await insertItems('ride_requests', [{
+      const rideData = {
         name: bookingData.name,
         address: bookingData.address,
         age: bookingData.age,
@@ -60,16 +77,28 @@ export const userService = {
         hospital: bookingData.hospital || 'Not specified',
         status: 'pending',
         charge: charge,
-        latitude: 0, // These should be replaced with actual coordinates
-        longitude: 0,
+        latitude: latitude,
+        longitude: longitude,
         created_at: new Date().toISOString()
-      }]);
+      };
       
+      console.log('Sending ride data to Supabase:', rideData);
+      
+      const { data, error } = await insertItems('ride_requests', [rideData]);
+      
+      if (error) {
+        console.error('Error in bookRide Supabase insertion:', error);
+        throw new Error(error.message || 'Failed to book ambulance');
+      }
+      
+      console.log('Booking successful, response:', data);
       return { data };
       
     } catch (error) {
       console.error('Error in bookRide:', error);
+      
       // Fallback to the API for demo purposes
+      console.log('Falling back to API');
       return api.post('/api/book-ride/', bookingData);
     }
   },
