@@ -54,7 +54,7 @@ const AdminDashboard = () => {
       
       // Make sure we're mapping the API response to our RideRequest type
       if (Array.isArray(ridesResponse.data)) {
-        const formattedRides: RideRequest[] = ridesResponse.data.map((item: any) => ({
+        const formattedRides = ridesResponse.data.map((item: any) => ({
           id: item.id || '',
           name: item.name || '',
           address: item.address || '',

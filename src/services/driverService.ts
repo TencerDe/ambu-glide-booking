@@ -2,6 +2,7 @@
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getItems, updateItem } from './supabaseUtils';
 
 // Use local storage as a fallback when Supabase is not available
 const getLocalDrivers = () => {
@@ -83,20 +84,8 @@ export const driverService = {
 
   getRideRequests: async () => {
     try {
-      // Use direct fetch for ride_requests since it's not in TypeScript definitions
-      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?status=eq.pending`, {
-        method: 'GET',
-        headers: {
-          'apikey': supabase.supabaseKey,
-          'Authorization': `Bearer ${supabase.supabaseKey}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch ride requests');
-      }
-      
-      const data = await response.json();
+      // Use utility function to fetch ride requests
+      const data = await getItems('ride_requests', { status: 'eq.pending' });
       return { data };
     } catch (error) {
       console.error('Error in getRideRequests:', error);
@@ -113,23 +102,11 @@ export const driverService = {
         throw new Error('Driver not authenticated');
       }
       
-      // Update the ride request using direct fetch
-      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?id=eq.${rideId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabase.supabaseKey,
-          'Authorization': `Bearer ${supabase.supabaseKey}`
-        },
-        body: JSON.stringify({
-          status: 'accepted',
-          driver_id: driverId
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to accept ride');
-      }
+      // Update the ride request using our utility function
+      await updateItem('ride_requests', {
+        status: 'accepted',
+        driver_id: driverId
+      }, { id: `eq.${rideId}` });
       
       // Also update driver status to 'busy'
       const { error: driverError } = await supabase

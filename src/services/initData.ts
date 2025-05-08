@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { adminService } from "./adminService";
 
 // Sample test driver data
 const TEST_DRIVER = {
@@ -7,9 +8,9 @@ const TEST_DRIVER = {
   username: "driver1",
   password: "password",
   is_available: true,
-  phone_number: "1234567890",
-  license_number: "LICX12345",
-  vehicle_number: "VEH2023"
+  phoneNumber: "1234567890",
+  licenseNumber: "LICX12345",
+  vehicleNumber: "VEH2023"
 };
 
 // Function to initialize a test driver for demonstration purposes
@@ -32,34 +33,16 @@ export const initializeTestDriver = async () => {
     
     console.info("Test driver not found. Creating in Supabase...");
     
-    // Insert the driver into the drivers table
-    const { data: newDriver, error: driverError } = await supabase
-      .from('drivers')
-      .insert([{
-        name: TEST_DRIVER.name,
-        username: TEST_DRIVER.username,
-        is_available: TEST_DRIVER.is_available,
-        phone_number: TEST_DRIVER.phone_number,
-        license_number: TEST_DRIVER.license_number,
-        vehicle_number: TEST_DRIVER.vehicle_number
-      }])
-      .select();
-    
-    if (driverError || !newDriver || newDriver.length === 0) {
-      throw new Error(driverError?.message || "Failed to create driver");
-    }
-    
-    // Insert the credentials
-    const { error: credError } = await supabase
-      .from('driver_credentials')
-      .insert([{
-        driver_id: newDriver[0].id,
-        password: TEST_DRIVER.password
-      }]);
-    
-    if (credError) {
-      throw new Error(credError.message);
-    }
+    // Use the adminService to add the driver
+    await adminService.addDriver({
+      name: TEST_DRIVER.name,
+      username: TEST_DRIVER.username,
+      is_available: TEST_DRIVER.is_available,
+      phoneNumber: TEST_DRIVER.phoneNumber,
+      licenseNumber: TEST_DRIVER.licenseNumber,
+      vehicleNumber: TEST_DRIVER.vehicleNumber,
+      password: TEST_DRIVER.password
+    });
     
     console.info("Successfully created test driver in Supabase!");
   } catch (error) {

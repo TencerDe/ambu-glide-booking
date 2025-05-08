@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { getItems } from './supabaseUtils';
 
 interface Driver {
   id?: string;
@@ -44,20 +44,10 @@ export const adminService = {
 
   viewRides: async () => {
     try {
-      // Use direct fetch for ride_requests since it's not in TypeScript definitions
-      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?select=*,driver:driver_id(id,name)`, {
-        method: 'GET',
-        headers: {
-          'apikey': supabase.supabaseKey,
-          'Authorization': `Bearer ${supabase.supabaseKey}`
-        }
+      // Use utility function to fetch ride requests with driver info
+      const data = await getItems('ride_requests', {
+        select: '*,driver:driver_id(id,name)'
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch ride requests');
-      }
-      
-      const data = await response.json();
       return { data };
     } catch (error) {
       console.error('Error in viewRides:', error);

@@ -1,6 +1,7 @@
 
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
+import { insertItems } from './supabaseUtils';
 
 // Define profile data type for TypeScript
 interface ProfileData {
@@ -48,38 +49,22 @@ export const userService = {
       // Fixed charge of 5000 rupees for testing
       const charge = 5000;
       
-      // Create a ride request using custom fetch instead of Supabase client
-      // since the ride_requests table is not in the TypeScript definitions
-      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabase.supabaseKey,
-          'Authorization': `Bearer ${supabase.supabaseKey}`
-        },
-        body: JSON.stringify([{
-          name: bookingData.name,
-          address: bookingData.address,
-          age: bookingData.age,
-          ambulance_type: bookingData.ambulanceType,
-          vehicle_type: bookingData.vehicleType,
-          notes: bookingData.notes || '',
-          hospital: bookingData.hospital || 'Not specified',
-          status: 'pending',
-          charge: charge,
-          latitude: 0, // These should be replaced with actual coordinates
-          longitude: 0,
-          created_at: new Date().toISOString()
-        }])
-      });
+      // Create a ride request using our utility function
+      const data = await insertItems('ride_requests', [{
+        name: bookingData.name,
+        address: bookingData.address,
+        age: bookingData.age,
+        ambulance_type: bookingData.ambulanceType,
+        vehicle_type: bookingData.vehicleType,
+        notes: bookingData.notes || '',
+        hospital: bookingData.hospital || 'Not specified',
+        status: 'pending',
+        charge: charge,
+        latitude: 0, // These should be replaced with actual coordinates
+        longitude: 0,
+        created_at: new Date().toISOString()
+      }]);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error booking ride:', errorData);
-        throw new Error('Failed to book ride');
-      }
-      
-      const data = await response.json();
       return { data };
       
     } catch (error) {
