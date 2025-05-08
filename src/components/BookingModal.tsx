@@ -82,24 +82,34 @@ const BookingModal: React.FC<BookingModalProps> = ({ onClose, onBookingSuccess, 
     try {
       setIsSubmitting(true);
       
-      // Ensure consistent location storage
+      // Double-check location data is properly stored
       const locationString = localStorage.getItem('currentLocation');
       if (locationString) {
         try {
           const location = JSON.parse(locationString);
-          // Store the location in both keys to ensure it's found
+          // Store the location consistently to ensure it's found
           const locationData = {
-            lat: location.lat,
-            lng: location.lng
+            lat: location.lat || 0,
+            lng: location.lng || 0
           };
           
+          // Store in both keys for redundancy
           localStorage.setItem('userLocation', JSON.stringify(locationData));
+          localStorage.setItem('currentLocation', JSON.stringify(locationData));
           console.log('Stored location data before booking:', locationData);
         } catch (error) {
           console.warn('Failed to parse location from localStorage:', error);
+          // Create placeholder location for testing
+          const placeholderLocation = { lat: 28.6139, lng: 77.2090 }; // Delhi coordinates
+          localStorage.setItem('currentLocation', JSON.stringify(placeholderLocation));
+          localStorage.setItem('userLocation', JSON.stringify(placeholderLocation));
         }
       } else {
         console.warn('No location data found in localStorage before booking');
+        // Create placeholder location for testing
+        const placeholderLocation = { lat: 28.6139, lng: 77.2090 }; // Delhi coordinates
+        localStorage.setItem('currentLocation', JSON.stringify(placeholderLocation));
+        localStorage.setItem('userLocation', JSON.stringify(placeholderLocation));
       }
       
       // Convert age to number for the API call

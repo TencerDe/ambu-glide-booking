@@ -74,6 +74,68 @@ export type Database = {
         }
         Relationships: []
       }
+      ride_requests: {
+        Row: {
+          address: string
+          age: number
+          ambulance_type: string
+          charge: number
+          created_at: string
+          driver_id: string | null
+          hospital: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+          vehicle_type: string
+        }
+        Insert: {
+          address: string
+          age: number
+          ambulance_type: string
+          charge?: number
+          created_at?: string
+          driver_id?: string | null
+          hospital: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_type: string
+        }
+        Update: {
+          address?: string
+          age?: number
+          ambulance_type?: string
+          charge?: number
+          created_at?: string
+          driver_id?: string | null
+          hospital?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_requests_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
