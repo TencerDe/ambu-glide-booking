@@ -83,18 +83,21 @@ export const driverService = {
 
   getRideRequests: async () => {
     try {
-      // Get pending ride requests from Supabase
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .select('*')
-        .eq('status', 'pending');
+      // Use direct fetch for ride_requests since it's not in TypeScript definitions
+      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?status=eq.pending`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabase.supabaseKey,
+          'Authorization': `Bearer ${supabase.supabaseKey}`
+        }
+      });
       
-      if (error) {
-        console.error('Error fetching ride requests:', error);
-        throw error;
+      if (!response.ok) {
+        throw new Error('Failed to fetch ride requests');
       }
       
-      return { data: data || [] };
+      const data = await response.json();
+      return { data };
     } catch (error) {
       console.error('Error in getRideRequests:', error);
       // Fallback to mock data for demo purposes
@@ -110,18 +113,22 @@ export const driverService = {
         throw new Error('Driver not authenticated');
       }
       
-      // Update the ride request in Supabase
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .update({
+      // Update the ride request using direct fetch
+      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?id=eq.${rideId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabase.supabaseKey,
+          'Authorization': `Bearer ${supabase.supabaseKey}`
+        },
+        body: JSON.stringify({
           status: 'accepted',
           driver_id: driverId
         })
-        .eq('id', rideId);
+      });
       
-      if (error) {
-        console.error('Error accepting ride:', error);
-        throw error;
+      if (!response.ok) {
+        throw new Error('Failed to accept ride');
       }
       
       // Also update driver status to 'busy'

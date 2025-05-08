@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import DriverManagement from '@/components/admin/DriverManagement';
 import RideRequests from '@/components/admin/RideRequests';
 
+// Define proper interfaces for the data
 interface RideRequest {
   id: string;
   name: string;
@@ -50,7 +51,24 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       const ridesResponse = await adminService.viewRides();
-      setRides(ridesResponse.data);
+      
+      // Make sure we're mapping the API response to our RideRequest type
+      if (Array.isArray(ridesResponse.data)) {
+        const formattedRides: RideRequest[] = ridesResponse.data.map((item: any) => ({
+          id: item.id || '',
+          name: item.name || '',
+          address: item.address || '',
+          ambulanceType: item.ambulance_type || '',
+          vehicleType: item.vehicle_type || '',
+          status: item.status || '',
+          createdAt: item.created_at || '',
+          driver: item.driver ? {
+            id: item.driver.id || '',
+            name: item.driver.name || ''
+          } : undefined
+        }));
+        setRides(formattedRides);
+      }
       
       try {
         const driversResponse = await adminService.viewDrivers();

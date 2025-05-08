@@ -44,24 +44,21 @@ export const adminService = {
 
   viewRides: async () => {
     try {
-      // Get ride requests from Supabase
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .select(`
-          *,
-          driver:driver_id (
-            id,
-            name
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Use direct fetch for ride_requests since it's not in TypeScript definitions
+      const response = await fetch(`${supabase.supabaseUrl}/rest/v1/ride_requests?select=*,driver:driver_id(id,name)`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabase.supabaseKey,
+          'Authorization': `Bearer ${supabase.supabaseKey}`
+        }
+      });
       
-      if (error) {
-        console.error('Error fetching rides:', error);
-        throw error;
+      if (!response.ok) {
+        throw new Error('Failed to fetch ride requests');
       }
       
-      return { data: data || [] };
+      const data = await response.json();
+      return { data };
     } catch (error) {
       console.error('Error in viewRides:', error);
       
@@ -72,19 +69,19 @@ export const adminService = {
             id: 'r1',
             name: 'John Doe',
             address: '123 Main St',
-            ambulanceType: 'With Medical Assistance',
-            vehicleType: 'Van',
+            ambulance_type: 'With Medical Assistance',
+            vehicle_type: 'Van',
             status: 'pending',
-            createdAt: new Date().toISOString()
+            created_at: new Date().toISOString()
           },
           {
             id: 'r2',
             name: 'Jane Smith',
             address: '456 Oak Ave',
-            ambulanceType: 'Without Medical Assistance',
-            vehicleType: 'Mini Bus',
+            ambulance_type: 'Without Medical Assistance',
+            vehicle_type: 'Mini Bus',
             status: 'accepted',
-            createdAt: new Date(Date.now() - 3600000).toISOString(),
+            created_at: new Date(Date.now() - 3600000).toISOString(),
             driver: { id: 'd1', name: 'Driver 1' }
           }
         ]
