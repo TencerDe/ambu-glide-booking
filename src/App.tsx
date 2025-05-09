@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import './App.css';
+import { AuthProvider } from './hooks/useAuth';
 
 // Pages
 import Index from './pages/Index';
@@ -33,32 +34,34 @@ function App() {
   }, []);
 
   return (
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/bookAmbulance" element={<BookAmbulance />} />
-      
-      {/* Protected Routes */}
-      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      
-      {/* Admin Routes */}
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin/dashboard/*" element={
-        <ProtectedRoute role="ADMIN">
-          <AdminDashboard />
-        </ProtectedRoute>
-      } />
-      
-      {/* Driver Routes */}
-      <Route path="/driver/login" element={<DriverLogin />} />
-      <Route path="/driver/dashboard/*" element={
-        <ProtectedRoute role="driver">
-          <DriverDashboard />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/bookAmbulance" element={<BookAmbulance />} />
+        
+        {/* Protected Routes */}
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard/*" element={
+          <ProtectedRoute role="ADMIN">
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* Driver Routes */}
+        <Route path="/driver/login" element={<DriverLogin />} />
+        <Route path="/driver/dashboard/*" element={
+          <ProtectedRoute role="driver">
+            <DriverDashboard />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AuthProvider>
   );
 }
 
