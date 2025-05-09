@@ -43,11 +43,19 @@ function App() {
       
       {/* Admin Routes */}
       <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin/dashboard/*" element={<ProtectedRoute role="ADMIN"><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/dashboard/*" element={
+        <ProtectedRoute role="ADMIN">
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
       
       {/* Driver Routes */}
       <Route path="/driver/login" element={<DriverLogin />} />
-      <Route path="/driver/dashboard/*" element={<ProtectedRoute role="driver"><DriverDashboard /></ProtectedRoute>} />
+      <Route path="/driver/dashboard/*" element={
+        <ProtectedRoute role="driver">
+          <DriverDashboard />
+        </ProtectedRoute>
+      } />
       
       <Route path="*" element={<NotFound />} />
     </Routes>

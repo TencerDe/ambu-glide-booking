@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  role?: string; // Add role as an optional prop
+  role?: string; // Role is an optional prop
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
@@ -18,7 +18,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
   }
 
   // If role is specified, check if user has that role
-  // Note: This is a simple implementation. You may want to enhance this based on your user role management
   if (role && user?.role !== role) {
     // Redirect to unauthorized page or home
     return <Navigate to="/" replace />;

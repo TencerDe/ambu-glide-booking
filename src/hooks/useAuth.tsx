@@ -13,7 +13,7 @@ interface AuthContextType {
     age?: number;
     preferredHospital?: string;
     healthIssues?: string[];
-    role?: string; // Add role property
+    role?: string; // Role property
   } | null;
   googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => void;
   logout: () => void;
