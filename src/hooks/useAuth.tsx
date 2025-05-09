@@ -13,8 +13,9 @@ interface AuthContextType {
     age?: number;
     preferredHospital?: string;
     healthIssues?: string[];
+    role?: string; // Add role property
   } | null;
-  googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string }) => void;
+  googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => void;
   logout: () => void;
   updateProfile: (profileData: { 
     bloodGroup?: string;
@@ -40,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const googleLogin = async (userData: { name: string; email: string; photoUrl?: string; token?: string }) => {
+  const googleLogin = async (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => {
     try {
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(userData));
