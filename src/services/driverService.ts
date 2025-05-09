@@ -378,69 +378,102 @@ export const driverService = {
   // Update driver availability status
   updateDriverStatus: async (status: string) => {
     try {
+      console.log(`Updating driver status to: ${status}`);
       const driverId = localStorage.getItem('driverId');
       
       if (!driverId) {
+        console.error('No driver ID found in localStorage');
         throw new Error('Driver not authenticated');
       }
       
       // Check if driver has active rides before setting to AVAILABLE
       if (status === 'AVAILABLE') {
-        const activeRidesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/ride_requests?driver_id=eq.${driverId}&or=(status.eq.accepted,status.eq.en_route,status.eq.picked_up)`,
+        console.log('Checking for active rides before setting status to AVAILABLE');
+        try {
+          const activeRidesResponse = await fetch(
+            `${SUPABASE_URL}/rest/v1/ride_requests?driver_id=eq.${driverId}&or=(status.eq.accepted,status.eq.en_route,status.eq.picked_up)`,
+            {
+              headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (!activeRidesResponse.ok) {
+            console.error('Failed to check active rides:', activeRidesResponse.statusText);
+            throw new Error('Failed to check active rides');
+          }
+          
+          const activeRides = await activeRidesResponse.json();
+          console.log('Active rides response:', activeRides);
+          
+          if (activeRides && activeRides.length > 0) {
+            console.log('Driver has active rides, cannot set status to AVAILABLE');
+            return { 
+              success: false, 
+              error: 'Cannot set status to Available while you have active rides' 
+            };
+          }
+        } catch (checkError) {
+          console.error('Error checking active rides:', checkError);
+          throw checkError;
+        }
+      }
+      
+      // Update driver status directly in Supabase
+      console.log(`Making PATCH request to ${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`);
+      
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
           {
+            method: 'PATCH',
             headers: {
               'apikey': SUPABASE_KEY,
               'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
               'Accept': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+              status: status,
+              is_available: status === 'AVAILABLE'
+            })
           }
         );
         
-        if (!activeRidesResponse.ok) {
-          throw new Error('Failed to check active rides');
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response:', response.status, errorText);
+          throw new Error(`Failed to update driver status: ${response.statusText}`);
         }
         
-        const activeRides = await activeRidesResponse.json();
-        if (activeRides && activeRides.length > 0) {
-          return { 
-            success: false, 
-            error: 'Cannot set status to Available while you have active rides' 
-          };
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        let updatedDriver;
+        try {
+          updatedDriver = responseText ? JSON.parse(responseText) : [];
+          console.log('Updated driver:', updatedDriver);
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          throw new Error('Invalid response format');
         }
-      }
-      
-      // Update driver status directly in Supabase instead of using Django API
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            status: status,
-            is_available: status === 'AVAILABLE'
-          })
+        
+        // Update driver data in localStorage
+        if (updatedDriver && updatedDriver.length > 0) {
+          console.log('Updating localStorage with driver data:', updatedDriver[0]);
+          localStorage.setItem('driverData', JSON.stringify(updatedDriver[0]));
+          return { success: true, data: updatedDriver[0] };
+        } else {
+          console.error('No driver data returned');
+          throw new Error('No driver data returned');
         }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to update driver status');
-      }
-      
-      const updatedDriver = await response.json();
-      
-      // Update driver data in localStorage
-      if (updatedDriver && updatedDriver.length > 0) {
-        localStorage.setItem('driverData', JSON.stringify(updatedDriver[0]));
-        return { success: true, data: updatedDriver[0] };
-      } else {
-        throw new Error('No driver data returned');
+      } catch (requestError) {
+        console.error('Request error:', requestError);
+        throw requestError;
       }
     } catch (error: any) {
       console.error('Error updating driver status:', error);
