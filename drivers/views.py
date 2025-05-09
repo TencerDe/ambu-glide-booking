@@ -87,6 +87,9 @@ class DriverStatusView(APIView):
             return Response(serializer.data)
         except Driver.DoesNotExist:
             return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            # Add better error handling
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AcceptRideView(APIView):
     def post(self, request):
@@ -114,3 +117,6 @@ class AcceptRideView(APIView):
             return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
         except Ride.DoesNotExist:
             return Response({'error': 'Ride not found or already accepted'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            # Add better error handling
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

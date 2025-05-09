@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { driverService } from '@/services/driverService';
+import { toggleDriverStatus } from '@/services/driverStatusService';
 import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building, Check, Navigation } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -207,8 +207,8 @@ const DriverDashboard = () => {
     }
   };
 
-  // New: Toggle driver availability status
-  const toggleDriverStatus = async () => {
+  // New: Toggle driver availability status using our dedicated service
+  const handleToggleDriverStatus = async () => {
     if (!driverProfile) return;
     
     // Don't allow changing status if there's an active ride
@@ -219,30 +219,19 @@ const DriverDashboard = () => {
     
     try {
       setStatusLoading(true);
-      const newStatus = driverProfile.status === 'AVAILABLE' ? 'OFFLINE' : 'AVAILABLE';
       
-      toast.loading(`Setting status to ${newStatus.toLowerCase()}...`);
-      
-      const result = await driverService.updateDriverStatus(newStatus);
-      
-      if (result.success) {
-        toast.dismiss();
-        toast.success(`Status updated to ${newStatus.toLowerCase()}`);
-        
-        // Update local state
-        setDriverProfile({
-          ...driverProfile,
-          status: newStatus,
-          is_available: newStatus === 'AVAILABLE'
-        });
-      } else {
-        toast.dismiss();
-        toast.error(result.error || 'Failed to update status');
-        setError(result.error || 'Failed to update status');
-      }
+      // Use our simplified toggle function with clear feedback
+      await toggleDriverStatus(
+        driverProfile.status,
+        (updatedDriverData) => {
+          setDriverProfile({
+            ...driverProfile,
+            ...updatedDriverData
+          });
+        }
+      );
     } catch (error: any) {
       console.error('Error toggling status:', error);
-      toast.dismiss();
       toast.error(error.message || 'Failed to update status');
     } finally {
       setStatusLoading(false);
@@ -343,7 +332,7 @@ const DriverDashboard = () => {
                       <Switch
                         id="driver-status"
                         checked={driverProfile.status === 'AVAILABLE'}
-                        onCheckedChange={toggleDriverStatus}
+                        onCheckedChange={handleToggleDriverStatus}
                         disabled={statusLoading || (currentRide && driverProfile.status === 'BUSY')}
                         className={currentRide && driverProfile.status === 'BUSY' ? 'opacity-50 cursor-not-allowed' : ''}
                       />
