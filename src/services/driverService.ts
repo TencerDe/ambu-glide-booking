@@ -375,7 +375,7 @@ export const driverService = {
     }
   },
 
-  // Update driver availability status - Fixed to handle the response correctly
+  // Update driver availability status
   updateDriverStatus: async (status: string) => {
     try {
       const driverId = localStorage.getItem('driverId');
@@ -410,32 +410,38 @@ export const driverService = {
         }
       }
       
-      // Update driver status - Using the Django API instead of direct Supabase access
-      const token = localStorage.getItem('token');
+      // Update driver status directly in Supabase instead of using Django API
       const response = await fetch(
-        `/api/driver/status/`,
+        `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
         {
-          method: 'POST',
+          method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+            'Accept': 'application/json'
           },
-          body: JSON.stringify({ status })
+          body: JSON.stringify({
+            status: status,
+            is_available: status === 'AVAILABLE'
+          })
         }
       );
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update driver status');
+        throw new Error('Failed to update driver status');
       }
       
-      // Parse the complete driver data response
-      const driverData = await response.json();
+      const updatedDriver = await response.json();
       
       // Update driver data in localStorage
-      localStorage.setItem('driverData', JSON.stringify(driverData));
-      
-      return { success: true, data: driverData };
+      if (updatedDriver && updatedDriver.length > 0) {
+        localStorage.setItem('driverData', JSON.stringify(updatedDriver[0]));
+        return { success: true, data: updatedDriver[0] };
+      } else {
+        throw new Error('No driver data returned');
+      }
     } catch (error: any) {
       console.error('Error updating driver status:', error);
       return { success: false, error: error.message || 'Failed to update driver status' };
