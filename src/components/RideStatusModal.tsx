@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Clock, MapPin, Ambulance } from 'lucide-react';
@@ -21,21 +20,26 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const [elapsed, setElapsed] = useState<number>(0);
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const [pollingInterval, setPollingInterval] = useState<number>(3000); // Start with 3 seconds
+  const [retryCount, setRetryCount] = useState<number>(0);
   
   // Handle WebSocket messages for ride status updates
   const handleRideMessage = (data: any) => {
     console.log('Ride status update received via WebSocket:', data);
-    if (data.type === 'ride_status_update' && data.ride?.id === rideId) {
-      setStatus(data.ride.status);
-      
-      if (data.ride.status === 'accepted' && data.ride.driver) {
-        setDriverInfo(data.ride.driver);
-        toast.success('A driver has accepted your ride!');
+    try {
+      if (data.type === 'ride_status_update' && data.ride?.id === rideId) {
+        setStatus(data.ride.status);
+        
+        if (data.ride.status === 'accepted' && data.ride.driver) {
+          setDriverInfo(data.ride.driver);
+          toast.success('A driver has accepted your ride!');
+        }
       }
+    } catch (error) {
+      console.error('Error handling WebSocket message:', error);
     }
   };
   
-  // Use WebSocket hook
+  // Use WebSocket hook with more robust error handling
   const { sendMessage, isConnected } = useWebSocket(
     userRideSocket,
     handleRideMessage,
@@ -46,6 +50,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         setPollingInterval(1500); // Poll more frequently when WebSocket is down
       } else if (status === 'connected') {
         setPollingInterval(3000); // Back to normal when connected
+        setRetryCount(0); // Reset retry count when connection is established
       }
     },
     localStorage.getItem('userId') || undefined
@@ -58,7 +63,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         console.log('Checking ride status for ride ID:', rideId);
         setIsPolling(true);
         
-        const { data, error } = await fetch(
+        const response = await fetch(
           `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&select=*`,
           {
             headers: {
@@ -66,12 +71,13 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
               'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo'
             }
           }
-        ).then(res => res.json());
+        );
         
-        if (error) {
-          console.error('Error checking ride status:', error);
-          return;
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        const data = await response.json();
         
         console.log('Ride status data received:', data);
         
@@ -92,8 +98,18 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
             fetchDriverInfo(rideData.driver_id);
           }
         }
+        
+        // Reset retry count on successful API call
+        setRetryCount(0);
       } catch (error) {
         console.error('Error in checkRideStatus:', error);
+        // Increment retry count on failure
+        setRetryCount(prev => prev + 1);
+        
+        // If too many failures in a row, show an error
+        if (retryCount > 5) {
+          toast.error('Having trouble connecting to the server. Please check your internet connection.');
+        }
       } finally {
         setIsPolling(false);
       }
@@ -103,7 +119,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     const fetchDriverInfo = async (driverId: string) => {
       try {
         console.log('Fetching driver info for driver ID:', driverId);
-        const { data: driverData, error: driverError } = await fetch(
+        const response = await fetch(
           `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}&select=*`,
           {
             headers: {
@@ -111,11 +127,15 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
               'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo'
             }
           }
-        ).then(res => res.json());
+        );
         
-        if (driverError) {
-          console.error('Error fetching driver info:', driverError);
-        } else if (driverData && driverData.length > 0) {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const driverData = await response.json();
+        
+        if (driverData && driverData.length > 0) {
           console.log('Driver info received:', driverData[0]);
           setDriverInfo(driverData[0]);
           toast.success('A driver has accepted your ride!');
@@ -128,11 +148,12 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     // Check status immediately
     checkRideStatus();
     
-    // Adjust polling frequency based on WebSocket connection state
-    const interval = setInterval(checkRideStatus, isConnected ? pollingInterval : pollingInterval / 2);
+    // Dynamic polling based on connection state and whether we have a driver
+    const interval = setInterval(checkRideStatus, 
+      isConnected ? pollingInterval : Math.max(1000, pollingInterval / 2));
     
     return () => clearInterval(interval);
-  }, [rideId, status, driverInfo, pollingInterval, isConnected]);
+  }, [rideId, status, driverInfo, pollingInterval, isConnected, retryCount]);
   
   // Timer for elapsed time
   useEffect(() => {
@@ -152,19 +173,26 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   
   const handleCancel = () => {
     // Try WebSocket first, fallback to direct API call
-    const cancelSuccessful = sendMessage({
-      type: 'cancel_ride',
-      ride_id: rideId
-    });
-    
-    // If WebSocket failed, use direct API
-    if (!cancelSuccessful) {
-      console.log('WebSocket unavailable, cancelling ride via API...');
+    try {
+      const cancelSuccessful = sendMessage({
+        type: 'cancel_ride',
+        ride_id: rideId
+      });
+      
+      // If WebSocket failed, use direct API
+      if (!cancelSuccessful) {
+        console.log('WebSocket unavailable, cancelling ride via API...');
+        cancelViaAPI();
+      }
+      
+      toast.info('Ride cancellation requested');
+      onClose();
+    } catch (error) {
+      console.error('Error cancelling ride:', error);
+      toast.error('Failed to cancel ride. Please try again.');
+      // Try the API anyway as a last resort
       cancelViaAPI();
     }
-    
-    toast.info('Ride cancellation requested');
-    onClose();
   };
   
   const cancelViaAPI = async () => {

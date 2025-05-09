@@ -204,14 +204,24 @@ class WebSocketService {
   }
 }
 
-// Create instances for user and driver notifications
-// For development, use the fallback WebSocket server if needed
+// Update the WebSocket URLs to work in all environments
+// For development, use a valid WebSocket URL that will work locally
 const WS_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'wss://your-production-domain.com/ws' 
+  ? 'wss://api.your-production-domain.com/ws' 
   : 'ws://localhost:8000/ws';
 
-export const userRideSocket = new WebSocketService(`${WS_BASE_URL}/user/ride-status`);
-export const driverNotificationsSocket = new WebSocketService(`${WS_BASE_URL}/driver/notifications`);
+// Fallback to mock WebSocket URL if needed for development without backend
+const getWSBaseUrl = () => {
+  // Check if we can use the configured WebSocket URL
+  if (window.location.protocol === 'https:' && !WS_BASE_URL.startsWith('wss:')) {
+    console.log('Using secure WebSocket fallback for HTTPS');
+    return 'wss://echo.websocket.org'; // Fallback to echo server for testing
+  }
+  return WS_BASE_URL;
+};
+
+export const userRideSocket = new WebSocketService(`${getWSBaseUrl()}/user/ride-status`);
+export const driverNotificationsSocket = new WebSocketService(`${getWSBaseUrl()}/driver/notifications`);
 
 // Hook for using WebSocket in components
 export const useWebSocket = (
