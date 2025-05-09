@@ -207,7 +207,7 @@ const DriverDashboard = () => {
     }
   };
 
-  // New: Toggle driver availability status using our dedicated service
+  // Toggle driver availability status using our dedicated service
   const handleToggleDriverStatus = async () => {
     if (!driverProfile) return;
     

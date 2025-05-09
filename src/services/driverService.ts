@@ -377,6 +377,11 @@ export const driverService = {
 
   // Update driver availability status
   updateDriverStatus: async (status: string) => {
+    // Note: this function is kept for backwards compatibility
+    // but we should prefer using the dedicated driverStatusService 
+    // for better reliability and consistency
+    console.log(`Deprecated: Using driverService.updateDriverStatus - consider using driverStatusService instead`);
+    
     try {
       console.log(`Updating driver status to: ${status}`);
       const driverId = localStorage.getItem('driverId');
@@ -462,7 +467,7 @@ export const driverService = {
           throw new Error('Invalid response format');
         }
         
-        // Update driver data in localStorage
+        // Update driver data in localStorage to ensure persistence
         if (updatedDriver && updatedDriver.length > 0) {
           console.log('Updating localStorage with driver data:', updatedDriver[0]);
           localStorage.setItem('driverData', JSON.stringify(updatedDriver[0]));
