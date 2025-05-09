@@ -1,4 +1,3 @@
-
 // Simple and robust service for driver operations
 // Using direct API calls instead of complex library calls for reliability
 
@@ -376,7 +375,7 @@ export const driverService = {
     }
   },
 
-  // New: Update driver availability status
+  // Update driver availability status - Fixed to handle the response correctly
   updateDriverStatus: async (status: string) => {
     try {
       const driverId = localStorage.getItem('driverId');
@@ -411,42 +410,32 @@ export const driverService = {
         }
       }
       
-      // Update driver status
+      // Update driver status - Using the Django API instead of direct Supabase access
+      const token = localStorage.getItem('token');
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
+        `/api/driver/status/`,
         {
-          method: 'PATCH',
+          method: 'POST',
           headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
           },
-          body: JSON.stringify({
-            status,
-            is_available: status === 'AVAILABLE'
-          })
+          body: JSON.stringify({ status })
         }
       );
       
       if (!response.ok) {
-        throw new Error('Failed to update driver status');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update driver status');
       }
+      
+      // Parse the complete driver data response
+      const driverData = await response.json();
       
       // Update driver data in localStorage
-      const driverDataStr = localStorage.getItem('driverData');
-      if (driverDataStr) {
-        try {
-          const driverObj = JSON.parse(driverDataStr);
-          driverObj.status = status;
-          driverObj.is_available = status === 'AVAILABLE';
-          localStorage.setItem('driverData', JSON.stringify(driverObj));
-        } catch (e) {
-          console.error('Error updating driver data in localStorage:', e);
-        }
-      }
+      localStorage.setItem('driverData', JSON.stringify(driverData));
       
-      return { success: true, data: { message: `Status updated to ${status}` } };
+      return { success: true, data: driverData };
     } catch (error: any) {
       console.error('Error updating driver status:', error);
       return { success: false, error: error.message || 'Failed to update driver status' };

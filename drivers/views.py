@@ -77,10 +77,14 @@ class DriverStatusView(APIView):
                         'error': 'Cannot set status to Available while you have active rides'
                     }, status=status.HTTP_400_BAD_REQUEST)
             
+            # Update both status and is_available fields
             driver.status = new_status
+            driver.is_available = (new_status == 'AVAILABLE')
             driver.save()
             
-            return Response({'status': new_status})
+            # Return the complete updated driver data
+            serializer = DriverSerializer(driver)
+            return Response(serializer.data)
         except Driver.DoesNotExist:
             return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -98,6 +102,7 @@ class AcceptRideView(APIView):
             
             # Automatically set driver status to BUSY when accepting a ride
             driver.status = 'BUSY'
+            driver.is_available = False
             driver.save()
             
             # Notify user through WebSockets (implementation in ws app)
