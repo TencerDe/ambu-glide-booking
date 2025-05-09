@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { driverService } from '@/services/driverService';
@@ -26,14 +26,18 @@ interface RideRequest {
   longitude?: number;
 }
 
+const MAX_ACCEPT_ATTEMPTS = 3;
+
 const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [acceptingRide, setAcceptingRide] = useState<string | null>(null);
+  const [acceptAttempts, setAcceptAttempts] = useState<{[key: string]: number}>({});
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentRide, setCurrentRide] = useState<any>(null);
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const driverId = localStorage.getItem('driverId');
 
   // Fetch initial ride requests and driver profile on component mount
   useEffect(() => {
@@ -68,23 +72,27 @@ const DriverDashboard = () => {
   }, []);
 
   // Handle WebSocket messages for driver notifications
-  const handleDriverMessage = (data: any) => {
+  const handleDriverMessage = useCallback((data: any) => {
     console.log('Driver notification received:', data);
     
     if (data.type === 'new_ride_request' && data.ride && !currentRide) {
       // Add the new ride request to the top of the list
-      setRideRequests(current => [data.ride, ...current]);
+      setRideRequests(current => {
+        // Check if this ride is already in the list
+        const exists = current.some(ride => ride.id === data.ride.id);
+        if (exists) return current;
+        return [data.ride, ...current];
+      });
       
       // Show notification
       toast.info('New ride request received!', {
         description: `From: ${data.ride.address}`
       });
     }
-  };
+  }, [currentRide]);
   
   // Use WebSocket hook for driver notifications
-  const driverId = localStorage.getItem('driverId');
-  const { sendMessage } = useWebSocket(
+  const { sendMessage, isConnected } = useWebSocket(
     driverNotificationsSocket,
     handleDriverMessage,
     (status) => console.log('WebSocket status:', status),
@@ -172,6 +180,18 @@ const DriverDashboard = () => {
     try {
       setAcceptingRide(rideId); // Set the ID of the ride being accepted
       
+      // Track number of attempts for this specific ride
+      setAcceptAttempts(prev => ({
+        ...prev,
+        [rideId]: (prev[rideId] || 0) + 1
+      }));
+      
+      // Display toast message showing attempt
+      const currentAttempt = acceptAttempts[rideId] || 0;
+      if (currentAttempt > 0) {
+        toast.info(`Attempting to accept ride (Attempt ${currentAttempt + 1})...`);
+      }
+      
       const response = await driverService.acceptRide(rideId);
       console.log('Accept ride response:', response);
       
@@ -189,6 +209,12 @@ const DriverDashboard = () => {
       
       toast.success('Ride accepted successfully!');
       
+      // Reset attempt counter for this ride
+      setAcceptAttempts(prev => ({
+        ...prev,
+        [rideId]: 0
+      }));
+      
       // Send a status update via WebSocket if needed
       sendMessage({
         type: 'status_update',
@@ -196,9 +222,28 @@ const DriverDashboard = () => {
       });
     } catch (error: any) {
       console.error('Error accepting ride:', error);
-      toast.error(error.message || 'Failed to accept ride');
-    } finally {
-      setAcceptingRide(null); // Reset accepting state
+      
+      const attempts = acceptAttempts[rideId] || 0;
+      
+      if (attempts < MAX_ACCEPT_ATTEMPTS - 1) {
+        toast.error(`Failed to accept ride: ${error.message}. Retrying...`);
+        
+        // Automatically retry after a short delay
+        setTimeout(() => {
+          if (acceptingRide === rideId) { // Only retry if the user hasn't clicked to accept another ride
+            handleAcceptRide(rideId);
+          }
+        }, 1500);
+      } else {
+        toast.error(`Failed to accept ride after multiple attempts: ${error.message}`);
+        
+        // Reset accepting state and attempts after max retries
+        setAcceptAttempts(prev => ({
+          ...prev,
+          [rideId]: 0
+        }));
+        setAcceptingRide(null);
+      }
     }
   };
   
@@ -323,6 +368,13 @@ const DriverDashboard = () => {
                     </div>
                   )}
                 </div>
+                
+                {!isConnected && (
+                  <div className="mt-4 p-2 bg-amber-50 text-amber-700 rounded-md text-sm flex items-center">
+                    <Bell className="h-4 w-4 mr-2" />
+                    <span>Using offline mode. Some features might be delayed.</span>
+                  </div>
+                )}
               </div>
             )}
             
