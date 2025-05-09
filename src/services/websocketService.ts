@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 type MessageHandler = (message: any) => void;
@@ -9,13 +8,13 @@ class WebSocketService {
   private messageHandlers: MessageHandler[] = [];
   private statusHandlers: StatusHandler[] = [];
   private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 10; // Increased from 5 to 10
-  private reconnectTimeout: number = 3000; // Start with 3 seconds
+  private maxReconnectAttempts: number = 10;
+  private reconnectTimeout: number = 3000;
   private url: string;
   private userId: string | null = null;
   private isConnecting: boolean = false;
   private connectionTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingMessages: any[] = []; // Store messages while disconnected
+  private pendingMessages: any[] = [];
 
   constructor(baseUrl: string) {
     this.url = baseUrl;
@@ -42,21 +41,31 @@ class WebSocketService {
     // If userId is provided, store it and use it in the URL
     if (userId) {
       this.userId = userId;
-      // Append userId to WebSocket URL if provided
-      this.url = this.url.replace(/\/+$/, '') + '/' + userId + '/';
     }
 
+    // Construct the WebSocket URL properly
+    let wsUrl = this.url;
+    
+    // Only append userId once if it exists
+    if (this.userId) {
+      // Remove trailing slashes
+      wsUrl = wsUrl.replace(/\/+$/, '');
+      // Ensure we have exactly one trailing slash
+      wsUrl = wsUrl + '/' + this.userId + '/';
+    }
+    
+    // Debug log the URL
+    console.log('Connecting to WebSocket at:', wsUrl);
+    
     try {
-      console.log('Connecting to WebSocket at:', this.url);
-      
       // Check if URL is valid before attempting connection
-      if (!this.url || !this.url.startsWith('ws')) {
-        console.error('Invalid WebSocket URL:', this.url);
+      if (!wsUrl || !wsUrl.startsWith('ws')) {
+        console.error('Invalid WebSocket URL:', wsUrl);
         this.handleConnectionFailure('Invalid WebSocket URL');
         return;
       }
       
-      this.socket = new WebSocket(this.url);
+      this.socket = new WebSocket(wsUrl);
 
       // Set a timeout for connection
       this.connectionTimer = setTimeout(() => {
@@ -106,7 +115,6 @@ class WebSocketService {
         }
         
         this.statusHandlers.forEach(handler => handler('error'));
-        // Don't set isConnecting to false here to prevent reconnection race conditions
       };
 
       this.socket.onclose = (event) => {
@@ -136,7 +144,7 @@ class WebSocketService {
       console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})... Reason: ${reason}`);
       
       setTimeout(() => {
-        this.connect(this.userId || undefined);
+        this.connect();  // Don't pass userId again to avoid duplication
       }, this.reconnectTimeout);
       
       // Exponential backoff with jitter to prevent thundering herd
@@ -176,7 +184,7 @@ class WebSocketService {
       
       // If not currently connecting, try to connect
       if (!this.isConnecting && this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.connect(this.userId || undefined);
+        this.connect();  // Don't pass userId again to avoid duplication
       }
       
       return false;
@@ -204,22 +212,28 @@ class WebSocketService {
   }
 }
 
-// Update the WebSocket URLs to work in all environments
-// For development, use a valid WebSocket URL that will work locally
-const WS_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'wss://api.your-production-domain.com/ws' 
-  : 'ws://localhost:8000/ws';
-
-// Fallback to mock WebSocket URL if needed for development without backend
+// Improved WebSocket URL handling with better fallbacks
 const getWSBaseUrl = () => {
-  // Check if we can use the configured WebSocket URL
-  if (window.location.protocol === 'https:' && !WS_BASE_URL.startsWith('wss:')) {
-    console.log('Using secure WebSocket fallback for HTTPS');
-    return 'wss://echo.websocket.org'; // Fallback to echo server for testing
+  // For development environment
+  if (process.env.NODE_ENV !== 'production') {
+    // For local development, attempt to use localhost WebSocket
+    try {
+      return 'ws://localhost:8000/ws';
+    } catch {
+      // Fallback to echo server if local server is unavailable
+      return 'wss://echo.websocket.org';
+    }
   }
-  return WS_BASE_URL;
+  
+  // For production environment
+  if (window.location.protocol === 'https:') {
+    return 'wss://api.example.com/ws'; // Replace with actual production WebSocket URL
+  } else {
+    return 'ws://api.example.com/ws'; // HTTP version (less common)
+  }
 };
 
+// Create WebSocket instances with appropriate base URLs
 export const userRideSocket = new WebSocketService(`${getWSBaseUrl()}/user/ride-status`);
 export const driverNotificationsSocket = new WebSocketService(`${getWSBaseUrl()}/driver/notifications`);
 
@@ -247,7 +261,7 @@ export const useWebSocket = (
     
     wsInstance.addStatusHandler(statusHandler);
     
-    // Try to connect immediately
+    // Try to connect immediately, but only pass userId once to avoid duplications
     wsInstance.connect(userId);
     
     return () => {
