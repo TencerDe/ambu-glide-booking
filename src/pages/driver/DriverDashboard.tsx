@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { driverNotificationsSocket } from '@/services/websocketService';
 
 interface RideRequest {
   id: string;
@@ -37,7 +38,7 @@ const DriverDashboard = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
-  // Function to fetch data - improved to use our simpler service
+  // Function to fetch data
   const fetchData = useCallback(async () => {
     try {
       if (loading) setLoading(true);
@@ -67,11 +68,69 @@ const DriverDashboard = () => {
     }
   }, [loading]);
 
-  // Initial load
+  // Setup WebSocket listener for real-time ride notifications
+  useEffect(() => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+    
+    // Connect to WebSocket
+    const wsConnection = driverNotificationsSocket;
+    wsConnection.connect(userId);
+    
+    // Handler for new ride requests
+    const handleRideNotification = (message: any) => {
+      if (message.type === 'new_ride_request') {
+        console.log('New ride request received:', message.ride);
+        
+        // Only update if we don't have a current ride
+        if (!currentRide) {
+          // Check if this ride is already in our list
+          setRideRequests(prev => {
+            const exists = prev.some(ride => ride.id === message.ride.id);
+            if (!exists) {
+              toast.info('New ride request received!');
+              return [...prev, message.ride];
+            }
+            return prev;
+          });
+        }
+      } else if (message.type === 'ride_cancelled') {
+        // Remove cancelled ride from requests
+        console.log('Ride cancelled:', message.ride_id);
+        setRideRequests(prev => prev.filter(ride => ride.id !== message.ride_id));
+        
+        // If it was our current ride, clear it
+        if (currentRide && currentRide.id === message.ride_id) {
+          toast.info('Current ride was cancelled by the user');
+          setCurrentRide(null);
+        }
+      }
+    };
+    
+    wsConnection.addMessageHandler(handleRideNotification);
+    
+    // Status handler for WebSocket connection
+    const handleStatus = (status: string) => {
+      console.log('WebSocket status:', status);
+      if (status === 'error' || status === 'disconnected') {
+        // If WebSocket fails, fall back to polling
+        console.log('WebSocket disconnected, falling back to polling');
+      }
+    };
+    
+    wsConnection.addStatusHandler(handleStatus);
+    
+    return () => {
+      wsConnection.removeMessageHandler(handleRideNotification);
+      wsConnection.removeStatusHandler(handleStatus);
+    };
+  }, [currentRide]);
+
+  // Initial load and polling fallback
   useEffect(() => {
     fetchData();
     
-    // Set up polling interval
+    // Set up polling interval as fallback
     const interval = setInterval(() => {
       fetchData();
     }, POLLING_INTERVAL);
