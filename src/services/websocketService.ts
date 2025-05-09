@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 
+// Remove React import as it shouldn't be part of a service
 type MessageHandler = (message: any) => void;
 type StatusHandler = (status: string) => void;
 
@@ -20,7 +20,12 @@ class WebSocketService {
 
   constructor(path: string) {
     this.baseUrl = this.getBaseUrl();
-    this.path = path;
+    this.path = this.normalizePath(path);
+  }
+
+  private normalizePath(path: string): string {
+    // Remove leading and trailing slashes to normalize the path
+    return path.replace(/^\/+|\/+$/g, '');
   }
 
   private getBaseUrl(): string {
@@ -38,30 +43,29 @@ class WebSocketService {
   }
 
   private buildUrl(): string {
+    // Start with base URL
     let url = this.baseUrl;
     
-    // Make sure there's no double slash between base and path
-    if (url.endsWith('/') && this.path.startsWith('/')) {
-      url = url + this.path.substring(1);
-    } else if (!url.endsWith('/') && !this.path.startsWith('/')) {
-      url = url + '/' + this.path;
-    } else {
-      url = url + this.path;
+    // Ensure there's a trailing slash on the base URL
+    if (!url.endsWith('/')) {
+      url += '/';
     }
+
+    // Append the normalized path
+    url += this.path;
     
     // Only append userId if it exists
     if (this.userId) {
       // Make sure url ends with a slash before appending userId
       if (!url.endsWith('/')) {
-        url = url + '/';
+        url += '/';
       }
-      url = url + this.userId + '/';
+      url += this.userId;
     }
     
-    // Remove any duplicate slashes that might appear
+    // Remove any duplicate slashes that might appear (except in protocol)
     url = url.replace(/([^:]\/)\/+/g, '$1');
     
-    // Log the final URL for debugging
     console.log('WebSocket URL:', url);
     
     return url;
@@ -95,6 +99,8 @@ class WebSocketService {
     const wsUrl = this.buildUrl();
     
     try {
+      console.log('Attempting to connect to WebSocket:', wsUrl);
+      
       // Create new WebSocket connection
       this.socket = new WebSocket(wsUrl);
       this.lastConnectedTimestamp = Date.now();
@@ -182,11 +188,15 @@ class WebSocketService {
       this.reconnectAttempts++;
       console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})... Reason: ${reason}`);
       
-      // If we've been failing repeatedly, reset the userId and try connecting without it
+      // Reset userId after a few failed attempts to try a simpler connection
       if (this.reconnectAttempts > 3) {
         const tempUserId = this.userId;
         this.userId = null;
-        setTimeout(() => this.connect(tempUserId), this.reconnectTimeout);
+        setTimeout(() => {
+          // Try to connect without userId first, then restore it on next attempt
+          this.connect();
+          this.userId = tempUserId;
+        }, this.reconnectTimeout);
       } else {
         setTimeout(() => this.connect(), this.reconnectTimeout);
       }
@@ -217,7 +227,7 @@ class WebSocketService {
     this.pendingMessages = []; // Clear pending messages
   }
 
-  sendMessage(message: any) {
+  sendMessage(message: any): boolean {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
       console.log('WebSocket message sent:', message);
@@ -257,17 +267,17 @@ class WebSocketService {
 }
 
 // Create WebSocket instances with appropriate paths
-export const userRideSocket = new WebSocketService('/ws/user/ride-status');
-export const driverNotificationsSocket = new WebSocketService('/ws/driver/notifications');
+export const userRideSocket = new WebSocketService('ws/user/ride-status');
+export const driverNotificationsSocket = new WebSocketService('ws/driver/notifications');
 
-// Hook for using WebSocket in components
+// Hook for using WebSocket in React components
 export const useWebSocket = (
   wsInstance: WebSocketService,
   onMessage?: MessageHandler,
   onStatus?: StatusHandler,
   userId?: string
 ) => {
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     // Custom status handler to track connection status
@@ -306,3 +316,6 @@ export const useWebSocket = (
     isConnected
   };
 };
+
+// Add React import at the top if needed by the useWebSocket hook
+import React from 'react';

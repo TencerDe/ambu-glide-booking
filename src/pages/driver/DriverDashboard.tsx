@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ interface RideRequest {
   longitude?: number;
 }
 
-const MAX_ACCEPT_ATTEMPTS = 3;
+const MAX_ACCEPT_ATTEMPTS = 5;
 
 const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
@@ -92,10 +93,16 @@ const DriverDashboard = () => {
   }, [currentRide]);
   
   // Use WebSocket hook for driver notifications
-  const { sendMessage, isConnected } = useWebSocket(
+  const { sendMessage, isConnected, connect } = useWebSocket(
     driverNotificationsSocket,
     handleDriverMessage,
-    (status) => console.log('WebSocket status:', status),
+    (status) => {
+      console.log('WebSocket status:', status);
+      // Reconnect on disconnection
+      if (status === 'disconnected' && driverId) {
+        setTimeout(() => connect(driverId), 2000);
+      }
+    },
     driverId || undefined
   );
 
@@ -181,17 +188,29 @@ const DriverDashboard = () => {
       setAcceptingRide(rideId); // Set the ID of the ride being accepted
       
       // Track number of attempts for this specific ride
+      const currentAttempts = acceptAttempts[rideId] || 0;
       setAcceptAttempts(prev => ({
         ...prev,
-        [rideId]: (prev[rideId] || 0) + 1
+        [rideId]: currentAttempts + 1
       }));
       
       // Display toast message showing attempt
-      const currentAttempt = acceptAttempts[rideId] || 0;
-      if (currentAttempt > 0) {
-        toast.info(`Attempting to accept ride (Attempt ${currentAttempt + 1})...`);
+      if (currentAttempts > 0) {
+        toast.info(`Attempting to accept ride (Attempt ${currentAttempts + 1})...`);
+      } else {
+        toast.info('Accepting ride...');
       }
       
+      // Send a status update via WebSocket before accepting
+      sendMessage({
+        type: 'status_update',
+        status: 'BUSY'
+      });
+      
+      // Wait a short time for WebSocket message to go through
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Now try to accept the ride
       const response = await driverService.acceptRide(rideId);
       console.log('Accept ride response:', response);
       
@@ -215,11 +234,7 @@ const DriverDashboard = () => {
         [rideId]: 0
       }));
       
-      // Send a status update via WebSocket if needed
-      sendMessage({
-        type: 'status_update',
-        status: 'BUSY'
-      });
+      setAcceptingRide(null);
     } catch (error: any) {
       console.error('Error accepting ride:', error);
       
@@ -233,7 +248,7 @@ const DriverDashboard = () => {
           if (acceptingRide === rideId) { // Only retry if the user hasn't clicked to accept another ride
             handleAcceptRide(rideId);
           }
-        }, 1500);
+        }, 1000 + (attempts * 500)); // Increasing delay with each retry
       } else {
         toast.error(`Failed to accept ride after multiple attempts: ${error.message}`);
         
@@ -243,6 +258,18 @@ const DriverDashboard = () => {
           [rideId]: 0
         }));
         setAcceptingRide(null);
+        
+        // Trigger a refresh of the ride requests
+        const refreshRides = async () => {
+          try {
+            const rideResponse = await driverService.getRideRequests();
+            setRideRequests(rideResponse.data);
+          } catch (refreshError) {
+            console.error('Error refreshing ride requests:', refreshError);
+          }
+        };
+        
+        refreshRides();
       }
     }
   };

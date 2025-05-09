@@ -1,3 +1,4 @@
+
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -15,15 +16,17 @@ const retry = async (fn: Function, retries = 3, delay = 500, finalErrorMsg = 'Op
   
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
+      console.log(`Attempt ${attempt + 1} starting...`);
       return await fn();
     } catch (error) {
-      console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+      console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`, error);
       lastError = error;
       await new Promise(resolve => setTimeout(resolve, delay));
       delay *= 1.5; // Exponential backoff
     }
   }
   
+  console.error(`All ${retries} attempts failed:`, lastError);
   throw new Error(finalErrorMsg);
 };
 
@@ -149,8 +152,10 @@ export const driverService = {
         throw new Error('Driver not authenticated');
       }
 
-      // Use retry mechanism for accepting rides
+      // Use retry mechanism for accepting rides with improved error handling
       return await retry(async () => {
+        console.log('Starting acceptRide attempt...');
+        
         // First check if the driver is already busy with another ride
         const { data: driverData, error: driverError } = await supabase
           .from('drivers')
@@ -193,8 +198,23 @@ export const driverService = {
         
         console.log('Ride is available, attempting to accept it...');
         
-        // Use a transaction-like approach for updating both the ride and driver status
-        // First, update the ride with driver info
+        // Transaction approach for updating both ride and driver
+        // First update the driver status to busy to claim exclusivity
+        const { data: updatedDriver, error: driverUpdateError } = await supabase
+          .from('drivers')
+          .update({ is_available: false })
+          .eq('id', driverId)
+          .select()
+          .maybeSingle();
+          
+        if (driverUpdateError) {
+          console.error('Error updating driver status:', driverUpdateError);
+          throw new Error('Failed to update driver status');
+        }
+        
+        console.log('Driver status updated to busy, now updating ride...');
+        
+        // Now update the ride with driver info
         const { data: rideData, error: rideError } = await supabase
           .from('ride_requests')
           .update({ 
@@ -210,11 +230,25 @@ export const driverService = {
           
         if (rideError) {
           console.error('Error updating ride status:', rideError);
+          
+          // If we failed to update the ride, reset the driver status
+          await supabase
+            .from('drivers')
+            .update({ is_available: true })
+            .eq('id', driverId);
+            
           throw new Error('Failed to accept ride. Please try again.');
         }
         
         if (!rideData) {
           console.error('No data returned from ride update');
+          
+          // Reset driver status if ride couldn't be updated
+          await supabase
+            .from('drivers')
+            .update({ is_available: true })
+            .eq('id', driverId);
+          
           // Double check if someone else took it in the meantime
           const { data: rideAfterAttempt } = await supabase
             .from('ride_requests')
@@ -231,36 +265,20 @@ export const driverService = {
         
         console.log('Ride accepted successfully:', rideData);
           
-        // Then update driver status to 'busy'
-        const { data: updatedDriver, error: driverUpdateError } = await supabase
-          .from('drivers')
-          .update({ is_available: false })
-          .eq('id', driverId)
-          .select()
-          .maybeSingle();
-          
-        if (driverUpdateError) {
-          console.error('Error updating driver status:', driverUpdateError);
-          // Don't throw here, as the ride was already accepted
-          console.log('Proceeding despite driver status update error');
-        } else {
-          console.log('Driver status updated to busy:', updatedDriver);
-          
-          // Update local storage with new driver status
-          const currentDriverData = localStorage.getItem('driverData');
-          if (currentDriverData) {
-            try {
-              const driverObj = JSON.parse(currentDriverData);
-              driverObj.is_available = false;
-              localStorage.setItem('driverData', JSON.stringify(driverObj));
-            } catch (e) {
-              console.error('Error updating driver data in localStorage:', e);
-            }
+        // Update local storage with new driver status
+        const currentDriverData = localStorage.getItem('driverData');
+        if (currentDriverData) {
+          try {
+            const driverObj = JSON.parse(currentDriverData);
+            driverObj.is_available = false;
+            localStorage.setItem('driverData', JSON.stringify(driverObj));
+          } catch (e) {
+            console.error('Error updating driver data in localStorage:', e);
           }
         }
         
         return { data: { message: 'Ride accepted successfully', ride: rideData } };
-      }, 3, 1000, 'Failed to accept ride after multiple attempts. Please try again later.');
+      }, 5, 800, 'Failed to accept ride after multiple attempts. Please try again later.');
       
     } catch (error: any) {
       console.error('Error in acceptRide:', error);
