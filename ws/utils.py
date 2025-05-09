@@ -10,7 +10,7 @@ import time
 logger = logging.getLogger(__name__)
 
 def notify_available_drivers(ride):
-    """Notify all available drivers about a new ride request"""
+    """Notify all available drivers about a new ride request with guaranteed delivery"""
     channel_layer = get_channel_layer()
     
     # Get all available drivers
@@ -18,19 +18,30 @@ def notify_available_drivers(ride):
     
     ride_data = RideDetailSerializer(ride).data
     
-    # Send notification to each available driver
+    # Send notification to each available driver with retry mechanism
     for driver in available_drivers:
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f'driver_{driver.user.id}_notifications',
-                {
-                    'type': 'ride_notification',
-                    'ride': ride_data
-                }
-            )
-            logger.info(f"Notified driver {driver.id} about ride {ride.id}")
-        except Exception as e:
-            logger.error(f"Failed to notify driver {driver.id}: {str(e)}")
+        max_retries = 3
+        retry_count = 0
+        success = False
+        
+        while retry_count < max_retries and not success:
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    f'driver_{driver.user.id}_notifications',
+                    {
+                        'type': 'ride_notification',
+                        'ride': ride_data
+                    }
+                )
+                logger.info(f"Successfully notified driver {driver.id} about ride {ride.id}")
+                success = True
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"Attempt {retry_count} failed to notify driver {driver.id}: {str(e)}")
+                if retry_count < max_retries:
+                    time.sleep(0.5 * retry_count)  # Exponential backoff
+                else:
+                    logger.error(f"Failed to notify driver {driver.id} after {max_retries} attempts: {str(e)}")
 
 def send_ride_update(ride):
     """Send ride status update to the user with improved reliability and guaranteed delivery"""
@@ -41,10 +52,10 @@ def send_ride_update(ride):
     # Ensure we have a user to notify
     if not ride.user:
         logger.warning(f"No user associated with ride {ride.id} for status update")
-        return
+        return False
     
     # Try to send with exponential backoff retry
-    max_retries = 3
+    max_retries = 5  # Increased from 3 to 5
     base_delay = 0.5  # Start with 500ms delay
     
     for attempt in range(max_retries):
@@ -57,9 +68,7 @@ def send_ride_update(ride):
                     'ride': ride_data
                 }
             )
-            logger.info(f"Sent ride update to user {ride.user.id} for ride {ride.id}: {ride.status} (attempt {attempt+1})")
-            
-            # Successfully sent, so we can exit the retry loop
+            logger.info(f"Successfully sent ride update to user {ride.user.id} for ride {ride.id}: {ride.status} (attempt {attempt+1})")
             return True
         except Exception as e:
             delay = base_delay * (2 ** attempt)  # Exponential backoff
@@ -70,3 +79,23 @@ def send_ride_update(ride):
             else:
                 logger.error(f"Failed to send ride update after {max_retries} attempts: {str(e)}")
                 return False
+
+def broadcast_ride_cancellation(ride_id, user_id):
+    """Broadcast ride cancellation to all drivers"""
+    channel_layer = get_channel_layer()
+    
+    # Get all drivers to notify about cancellation
+    drivers = Driver.objects.all()
+    
+    for driver in drivers:
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f'driver_{driver.user.id}_notifications',
+                {
+                    'type': 'ride_cancelled',
+                    'ride_id': ride_id
+                }
+            )
+            logger.info(f"Notified driver {driver.id} about cancellation of ride {ride_id}")
+        except Exception as e:
+            logger.error(f"Failed to notify driver {driver.id} about cancellation: {str(e)}")

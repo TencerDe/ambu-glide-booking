@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Clock, MapPin, Ambulance, PhoneCall } from 'lucide-react';
+import { Clock, MapPin, PhoneCall, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { userRideSocket, useWebSocket } from '@/services/websocketService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RideStatusModalProps {
   onClose: () => void;
@@ -20,8 +22,51 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const [elapsed, setElapsed] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastChecked, setLastChecked] = useState<number>(Date.now());
   const [forceRefresh, setForceRefresh] = useState<boolean>(false);
+  const userId = localStorage.getItem('userId');
+  
+  // Setup WebSocket connection for realtime updates
+  const { isConnected } = useWebSocket(
+    userRideSocket,
+    (message) => {
+      console.log('Received WebSocket message:', message);
+      
+      if (message.type === 'ride_status_update' && message.ride && message.ride.id === rideId) {
+        console.log('Ride status update:', message.ride);
+        
+        // Update status if changed
+        if (message.ride.status !== status) {
+          const newStatus = message.ride.status;
+          setStatus(newStatus);
+          
+          // Show toast notification
+          if (newStatus === 'ACCEPTED') {
+            toast.success('A driver has accepted your ride!');
+          } else if (newStatus === 'EN_ROUTE') {
+            toast.success('Your driver is on the way!');
+          } else if (newStatus === 'PICKED_UP') {
+            toast.success('You have been picked up!');
+          }
+        }
+        
+        // Fetch driver info if available and not already loaded
+        if ((message.ride.status === 'ACCEPTED' || 
+             message.ride.status === 'EN_ROUTE' || 
+             message.ride.status === 'PICKED_UP') && 
+            message.ride.driver && !driverInfo) {
+          fetchDriverInfo(message.ride.driver.id);
+        }
+      }
+    },
+    (status) => {
+      console.log('WebSocket connection status:', status);
+      if (status === 'error' || status === 'disconnected') {
+        // If WebSocket fails, fall back to polling
+        console.log('WebSocket connection failed, falling back to polling');
+      }
+    },
+    userId || undefined
+  );
   
   // Timer for elapsed time
   useEffect(() => {
@@ -39,201 +84,104 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Connect to WebSocket for real-time updates if available
-  useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
+  // Function to check ride status via direct API call (fallback)
+  const checkRideStatus = useCallback(async () => {
+    if (!rideId) return;
     
-    // Try to connect to WebSocket
-    try {
-      const wsUrl = process.env.NODE_ENV === 'production' 
-        ? `wss://${window.location.host}/ws/user/${userId}/ride-status/` 
-        : `ws://localhost:8000/ws/user/${userId}/ride-status/`;
-        
-      const socket = new WebSocket(wsUrl);
-      
-      socket.onopen = () => {
-        console.log('WebSocket connected for ride updates');
-      };
-      
-      socket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'ride_status_update' && data.ride && data.ride.id === rideId) {
-            console.log('Received WebSocket update for ride:', data.ride);
-            
-            // Update status if changed
-            if (data.ride.status !== status) {
-              setStatus(data.ride.status);
-              
-              // Show toast notification
-              if (data.ride.status === 'accepted') {
-                toast.success('A driver has accepted your ride!', { id: 'ride-accepted' });
-              }
-            }
-            
-            // Fetch driver info if needed
-            if ((data.ride.status === 'accepted' || data.ride.status === 'en_route' || 
-                data.ride.status === 'picked_up') && data.ride.driver_id && !driverInfo) {
-              fetchDriverInfo(data.ride.driver_id);
-            }
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-      
-      socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        // Will fall back to polling
-      };
-      
-      return () => {
-        socket.close();
-      };
-    } catch (error) {
-      console.error('Failed to connect to WebSocket:', error);
-      // Will fall back to polling
-    }
-  }, [rideId, status]);
-
-  // Function to check ride status with improved reliability
-  const checkRideStatus = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch(
-        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&select=*`,
-        {
-          method: 'GET',
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Prefer': 'return=representation'
-          }
-        }
-      );
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('id', rideId)
+        .single();
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (error) throw error;
       
-      const data = await response.json();
-      setLastChecked(Date.now());
-      
-      if (data && data.length > 0) {
-        const rideData = data[0];
-        
-        console.log('Ride status check result:', rideData);
+      if (data) {
+        console.log('Ride status check result:', data);
         
         // Update status if changed
-        if (rideData.status !== status) {
-          console.log(`Ride status changed from ${status} to ${rideData.status}`);
-          setStatus(rideData.status);
+        if (data.status !== status) {
+          console.log(`Ride status changed from ${status} to ${data.status}`);
+          setStatus(data.status);
           
           // Show toast notification on status change
-          if (rideData.status === 'accepted') {
-            toast.success('A driver has accepted your ride!', {
-              id: 'ride-accepted'
-            });
-          } else if (rideData.status === 'en_route') {
+          if (data.status === 'accepted') {
+            toast.success('A driver has accepted your ride!');
+          } else if (data.status === 'en_route') {
             toast.success('Your driver is on the way!');
-          } else if (rideData.status === 'picked_up') {
+          } else if (data.status === 'picked_up') {
             toast.success('You have been picked up!');
-          } else if (rideData.status === 'cancelled') {
-            toast.error('Your ride has been cancelled');
-          } else if (rideData.status === 'completed') {
-            toast.success('Your ride has been completed');
           }
         }
         
         // Check if we need to fetch driver info
-        if ((rideData.status === 'accepted' || rideData.status === 'en_route' || rideData.status === 'picked_up') && 
-            rideData.driver_id && !driverInfo) {
-          fetchDriverInfo(rideData.driver_id);
+        if ((data.status === 'accepted' || data.status === 'en_route' || data.status === 'picked_up') && 
+            data.driver_id && !driverInfo) {
+          fetchDriverInfo(data.driver_id);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error checking ride status:', error);
       setError('Failed to update ride status. Please check your connection.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [rideId, status, driverInfo]);
   
-  // Function to fetch driver information with better error handling
+  // Function to fetch driver information
   const fetchDriverInfo = async (driverId: string) => {
     console.log(`Fetching driver info for driver ID: ${driverId}`);
     try {
-      const response = await fetch(
-        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}&select=*`,
-        {
-          method: 'GET',
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        }
-      );
+      const { data, error } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('id', driverId)
+        .single();
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (error) throw error;
       
-      const drivers = await response.json();
-      
-      if (drivers && drivers.length > 0) {
-        console.log('Driver info received:', drivers[0]);
-        setDriverInfo(drivers[0]);
-        // Show success toast that driver info was loaded
-        toast.success(`Your driver ${drivers[0].name} is on the way!`);
-      } else {
-        console.log('No driver info found for ID:', driverId);
+      if (data) {
+        console.log('Driver info received:', data);
+        setDriverInfo(data);
+        toast.success(`Your driver ${data.name} is on the way!`);
       }
     } catch (error) {
       console.error('Error fetching driver info:', error);
+      // Don't set an error state here, as this is not critical
     }
   };
   
   // Function to cancel ride
   const handleCancel = async () => {
+    if (status !== 'pending') {
+      toast.error('Cannot cancel ride at this stage');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       toast.loading('Cancelling ride...', {
         id: 'cancel-ride'
       });
       
-      const response = await fetch(
-        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
-            status: 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-        }
-      );
+      const { error } = await supabase
+        .from('ride_requests')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', rideId);
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (error) throw error;
       
       toast.dismiss('cancel-ride');
       toast.success('Ride cancelled successfully');
       setStatus('cancelled');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error cancelling ride:', error);
       toast.dismiss('cancel-ride');
       toast.error('Failed to cancel ride. Please try again.');
@@ -249,24 +197,42 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     toast.info('Refreshing ride status...');
   };
   
-  // More frequent polling for ride updates when in pending state or after force refresh
+  // Initialize on mount
   useEffect(() => {
-    // Check status immediately on mount or force refresh
+    // Check status immediately
     checkRideStatus();
-    
-    // Set up polling interval - very frequent when pending (0.8 seconds), less when accepted
-    const interval = setInterval(() => {
-      // If too much time has passed without an update, force refresh
-      const timeWithoutUpdate = Date.now() - lastChecked;
-      const shouldForceFetch = timeWithoutUpdate > 5000; // 5 seconds
-      
-      if (shouldForceFetch || (status === 'pending')) {
+  }, [checkRideStatus]);
+  
+  // Fallback to polling if WebSocket is not connected
+  useEffect(() => {
+    if (!isConnected) {
+      const interval = setInterval(() => {
         checkRideStatus();
-      }
-    }, status === 'pending' ? 800 : 3000);
-    
-    return () => clearInterval(interval);
-  }, [rideId, status, lastChecked, forceRefresh]);
+      }, status === 'pending' ? 3000 : 5000); // More frequent when pending
+      
+      return () => clearInterval(interval);
+    }
+  }, [isConnected, checkRideStatus, status]);
+  
+  // Get descriptive status text
+  const getStatusText = () => {
+    switch (status) {
+      case 'pending':
+        return 'Waiting for a driver to accept your ride';
+      case 'accepted':
+        return 'A driver has accepted your ride and is on the way';
+      case 'en_route':
+        return 'Driver is on the way to pick you up';
+      case 'picked_up':
+        return 'You have been picked up';
+      case 'completed':
+        return 'Your ride has been completed';
+      case 'cancelled':
+        return 'This ride has been cancelled';
+      default:
+        return 'Unknown status';
+    }
+  };
   
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -275,15 +241,30 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         
         {error && (
           <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
-            {error}
+            <div className="flex items-start">
+              <AlertTriangle className="h-4 w-4 mr-1 mt-0.5" />
+              <div>
+                <p>{error}</p>
+                <p className="text-xs mt-1">Connection issue detected. We'll keep trying.</p>
+              </div>
+            </div>
             <Button 
               variant="outline" 
               size="sm" 
               onClick={handleManualRefresh} 
-              className="ml-2 text-xs"
+              className="ml-2 mt-2 text-xs"
             >
-              Retry
+              Retry Now
             </Button>
+          </div>
+        )}
+        
+        {!isConnected && status !== 'cancelled' && status !== 'completed' && (
+          <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs rounded">
+            <p className="flex items-center">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Realtime updates unavailable - using fallback mode
+            </p>
           </div>
         )}
         
@@ -304,6 +285,8 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
             </span>
           </div>
           
+          <p className="text-sm text-center mb-3">{getStatusText()}</p>
+          
           <div className="bg-gray-50 border rounded-lg p-4 mb-4">
             {status === 'pending' ? (
               <div className="flex flex-col items-center py-4">
@@ -321,8 +304,9 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
                   size="sm" 
                   onClick={handleManualRefresh} 
                   className="mt-3"
+                  disabled={isLoading}
                 >
-                  Refresh Status
+                  {isLoading ? 'Refreshing...' : 'Refresh Status'}
                 </Button>
               </div>
             ) : status === 'cancelled' ? (

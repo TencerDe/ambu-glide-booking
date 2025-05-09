@@ -1,23 +1,27 @@
 
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from drivers.models import Driver
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 class DriverNotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Extract driver ID from URL route or query param
         user_id = self.scope['url_route']['kwargs'].get('user_id')
         if not user_id:
+            logger.warning("WebSocket connection attempt without user_id")
             await self.close()
             return
         
         # Verify this is a driver
         is_driver = await self.is_user_driver(user_id)
         if not is_driver:
+            logger.warning(f"WebSocket connection attempt by non-driver user: {user_id}")
             await self.close()
             return
         
@@ -30,6 +34,7 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         
+        logger.info(f"Driver {user_id} connected to WebSocket")
         await self.accept()
     
     async def disconnect(self, close_code):
@@ -39,33 +44,62 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
                 self.notification_group_name,
                 self.channel_name
             )
+            logger.info(f"Driver {self.driver_id} disconnected from WebSocket with code {close_code}")
     
     async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type')
-        
-        if message_type == 'status_update':
-            status = data.get('status')
-            await self.update_driver_status(self.driver_id, status)
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
             
-            await self.send(text_data=json.dumps({
-                'type': 'status_updated',
-                'status': status
-            }))
+            if message_type == 'status_update':
+                status = data.get('status')
+                success = await self.update_driver_status(self.driver_id, status)
+                
+                if success:
+                    await self.send(text_data=json.dumps({
+                        'type': 'status_updated',
+                        'status': status,
+                        'success': True
+                    }))
+                else:
+                    await self.send(text_data=json.dumps({
+                        'type': 'status_updated',
+                        'status': status,
+                        'success': False,
+                        'error': 'Failed to update status'
+                    }))
+            elif message_type == 'ping':
+                # Handle ping messages to keep connection alive
+                await self.send(text_data=json.dumps({
+                    'type': 'pong',
+                    'timestamp': data.get('timestamp')
+                }))
+        except json.JSONDecodeError:
+            logger.error(f"Driver {self.driver_id} sent invalid JSON")
+        except Exception as e:
+            logger.error(f"Error in WebSocket receive for driver {self.driver_id}: {str(e)}")
     
     async def ride_notification(self, event):
         # Send ride notification to driver
-        await self.send(text_data=json.dumps({
-            'type': 'new_ride_request',
-            'ride': event['ride']
-        }))
+        try:
+            await self.send(text_data=json.dumps({
+                'type': 'new_ride_request',
+                'ride': event['ride']
+            }))
+            logger.info(f"Sent ride notification to driver {self.driver_id}")
+        except Exception as e:
+            logger.error(f"Error sending ride notification to driver {self.driver_id}: {str(e)}")
     
     async def ride_cancelled(self, event):
         # Send cancellation notification
-        await self.send(text_data=json.dumps({
-            'type': 'ride_cancelled',
-            'ride_id': event['ride_id']
-        }))
+        try:
+            await self.send(text_data=json.dumps({
+                'type': 'ride_cancelled',
+                'ride_id': event['ride_id']
+            }))
+            logger.info(f"Sent ride cancellation to driver {self.driver_id} for ride {event['ride_id']}")
+        except Exception as e:
+            logger.error(f"Error sending ride cancellation to driver {self.driver_id}: {str(e)}")
     
     @database_sync_to_async
     def is_user_driver(self, user_id):
@@ -73,6 +107,7 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
             user = User.objects.get(id=user_id)
             return user.user_type == 'DRIVER'
         except User.DoesNotExist:
+            logger.warning(f"User {user_id} not found when checking if driver")
             return False
     
     @database_sync_to_async
@@ -80,11 +115,18 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
         try:
             driver = Driver.objects.get(user_id=user_id)
             if status in [choice[0] for choice in Driver.STATUS_CHOICES]:
+                previous_status = driver.status
                 driver.status = status
                 driver.save()
+                logger.info(f"Driver {user_id} status changed from {previous_status} to {status}")
                 return True
+            logger.warning(f"Invalid status '{status}' attempted for driver {user_id}")
             return False
         except Driver.DoesNotExist:
+            logger.error(f"Driver with user_id {user_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"Error updating driver status: {str(e)}")
             return False
 
 class UserRideStatusConsumer(AsyncWebsocketConsumer):
@@ -92,6 +134,7 @@ class UserRideStatusConsumer(AsyncWebsocketConsumer):
         # Extract user ID from URL route
         user_id = self.scope['url_route']['kwargs'].get('user_id')
         if not user_id:
+            logger.warning("WebSocket connection attempt without user_id")
             await self.close()
             return
         
@@ -104,6 +147,7 @@ class UserRideStatusConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         
+        logger.info(f"User {user_id} connected to ride status WebSocket")
         await self.accept()
     
     async def disconnect(self, close_code):
@@ -113,10 +157,31 @@ class UserRideStatusConsumer(AsyncWebsocketConsumer):
                 self.ride_status_group_name,
                 self.channel_name
             )
+            logger.info(f"User {self.user_id} disconnected from WebSocket with code {close_code}")
+    
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+            
+            if message_type == 'ping':
+                # Handle ping messages to keep connection alive
+                await self.send(text_data=json.dumps({
+                    'type': 'pong',
+                    'timestamp': data.get('timestamp')
+                }))
+        except json.JSONDecodeError:
+            logger.error(f"User {self.user_id} sent invalid JSON")
+        except Exception as e:
+            logger.error(f"Error in WebSocket receive for user {self.user_id}: {str(e)}")
     
     async def ride_status_update(self, event):
         # Send ride status update to user
-        await self.send(text_data=json.dumps({
-            'type': 'ride_status_update',
-            'ride': event['ride']
-        }))
+        try:
+            await self.send(text_data=json.dumps({
+                'type': 'ride_status_update',
+                'ride': event['ride']
+            }))
+            logger.info(f"Sent ride status update to user {self.user_id}")
+        except Exception as e:
+            logger.error(f"Error sending ride status update to user {self.user_id}: {str(e)}")
