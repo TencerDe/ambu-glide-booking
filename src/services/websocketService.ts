@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 type MessageHandler = (message: any) => void;
@@ -12,13 +13,16 @@ class WebSocketService {
   private reconnectTimeout: number = 3000; // Start with 3 seconds
   private url: string;
   private userId: string | null = null;
+  private isConnecting: boolean = false;
 
   constructor(baseUrl: string) {
     this.url = baseUrl;
   }
 
   connect(userId?: string) {
-    if (this.socket?.readyState === WebSocket.OPEN) return;
+    if (this.socket?.readyState === WebSocket.OPEN || this.isConnecting) return;
+    
+    this.isConnecting = true;
     
     // If userId is provided, store it and use it in the URL
     if (userId) {
@@ -33,6 +37,7 @@ class WebSocketService {
 
       this.socket.onopen = () => {
         console.log('WebSocket connected');
+        this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.reconnectTimeout = 3000;
         this.statusHandlers.forEach(handler => handler('connected'));
@@ -50,11 +55,13 @@ class WebSocketService {
 
       this.socket.onerror = (error) => {
         console.error('WebSocket error:', error);
+        this.isConnecting = false;
         this.statusHandlers.forEach(handler => handler('error'));
       };
 
       this.socket.onclose = (event) => {
         console.log('WebSocket closed, code:', event.code, 'reason:', event.reason);
+        this.isConnecting = false;
         this.statusHandlers.forEach(handler => handler('disconnected'));
         
         // Attempt to reconnect
@@ -72,6 +79,7 @@ class WebSocketService {
       };
     } catch (error) {
       console.error('WebSocket connection error:', error);
+      this.isConnecting = false;
     }
   }
 
@@ -81,6 +89,7 @@ class WebSocketService {
       this.socket.close();
       this.socket = null;
     }
+    this.isConnecting = false;
   }
 
   sendMessage(message: any) {

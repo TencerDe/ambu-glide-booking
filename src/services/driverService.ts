@@ -153,7 +153,7 @@ export const driverService = {
         .from('ride_requests')
         .select('status, driver_id')
         .eq('id', rideId)
-        .single();
+        .maybeSingle(); // Using maybeSingle instead of single to prevent errors
         
       if (rideCheckError) {
         console.error('Error checking ride status:', rideCheckError);
@@ -173,15 +173,16 @@ export const driverService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', rideId)
-        .select(`
-          *,
-          driver:driver_id(*)
-        `)
-        .single();
+        .select()
+        .maybeSingle(); // Using maybeSingle instead of single
         
       if (rideError) {
         console.error('Error updating ride status:', rideError);
         throw new Error(rideError.message || 'Failed to accept ride');
+      }
+      
+      if (!rideData) {
+        throw new Error('Failed to accept ride. The ride may no longer be available.');
       }
       
       console.log('Ride accepted successfully:', rideData);
@@ -191,7 +192,8 @@ export const driverService = {
         .from('drivers')
         .update({ is_available: false })
         .eq('id', driverId)
-        .select();
+        .select()
+        .maybeSingle(); // Using maybeSingle instead of single
         
       if (driverUpdateError) {
         console.error('Error updating driver status:', driverUpdateError);
@@ -263,7 +265,7 @@ export const driverService = {
         .in('status', ['accepted', 'en_route'])
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle(); // Using maybeSingle instead of single
         
       if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows returned" which is not an error
         console.error('Error fetching current ride:', error);
