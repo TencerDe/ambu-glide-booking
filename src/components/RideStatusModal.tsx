@@ -19,10 +19,11 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const [status, setStatus] = useState<string>(initialStatus);
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [elapsed, setElapsed] = useState<number>(0);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
   
   // Handle WebSocket messages for ride status updates
   const handleRideMessage = (data: any) => {
-    console.log('Ride status update received:', data);
+    console.log('Ride status update received via WebSocket:', data);
     if (data.type === 'ride_status_update' && data.ride?.id === rideId) {
       setStatus(data.ride.status);
       
@@ -37,6 +38,9 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   useEffect(() => {
     const checkRideStatus = async () => {
       try {
+        console.log('Checking ride status for ride ID:', rideId);
+        setIsPolling(true);
+        
         const { data, error } = await fetch(
           `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&select=*`,
           {
@@ -52,12 +56,18 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
           return;
         }
         
+        console.log('Ride status data received:', data);
+        
         if (data && data.length > 0) {
           const rideData = data[0];
+          console.log('Current status:', status, 'New status:', rideData.status);
+          
+          // Only update if status has changed
           if (rideData.status !== status) {
             setStatus(rideData.status);
             
             if (rideData.status === 'accepted' && rideData.driver_id) {
+              console.log('Ride accepted, getting driver info');
               // Get driver info
               const { data: driverData, error: driverError } = await fetch(
                 `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${rideData.driver_id}&select=*`,
@@ -72,6 +82,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
               if (driverError) {
                 console.error('Error fetching driver info:', driverError);
               } else if (driverData && driverData.length > 0) {
+                console.log('Driver info received:', driverData[0]);
                 setDriverInfo(driverData[0]);
                 toast.success('A driver has accepted your ride!');
               }
@@ -80,14 +91,16 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         }
       } catch (error) {
         console.error('Error in checkRideStatus:', error);
+      } finally {
+        setIsPolling(false);
       }
     };
     
     // Check status immediately
     checkRideStatus();
     
-    // Set up polling for status updates every 5 seconds as a fallback for WebSocket
-    const interval = setInterval(checkRideStatus, 5000);
+    // Set up polling for status updates every 3 seconds as a fallback for WebSocket
+    const interval = setInterval(checkRideStatus, 3000);
     
     return () => clearInterval(interval);
   }, [rideId, status]);
@@ -174,7 +187,10 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
                     <p className="text-green-600 mt-2">Driver is on the way to your location</p>
                   </div>
                 ) : (
-                  <p className="text-gray-600">Driver information loading...</p>
+                  <div className="flex flex-col items-center py-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mb-2"></div>
+                    <p className="text-gray-600">Driver information loading...</p>
+                  </div>
                 )}
               </div>
             )}
@@ -192,12 +208,14 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
             </Button>
           )}
           
-          <Button 
-            className={`w-full ${status !== 'pending' ? '' : 'hidden'}`}
-            onClick={() => window.open(`tel:${driverInfo?.phone_number || '108'}`)}
-          >
-            Contact Driver
-          </Button>
+          {driverInfo?.phone_number && status !== 'pending' && (
+            <Button 
+              className="w-full"
+              onClick={() => window.open(`tel:${driverInfo?.phone_number || '108'}`)}
+            >
+              Contact Driver
+            </Button>
+          )}
           
           <Button
             variant={status === 'pending' ? 'default' : 'outline'}

@@ -147,21 +147,12 @@ export const driverService = {
         throw new Error('You already have an active ride. Complete it before accepting new rides.');
       }
       
-      // Add a small delay to prevent race conditions with other drivers
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Use a database transaction to safely check and update the ride
-      // Since Supabase JS client doesn't support transactions directly, 
-      // we need to do this with careful error handling
-      
-      // Step 1: Check if the ride is still available with a SELECT FOR UPDATE equivalent
-      // (Supabase doesn't support FOR UPDATE, so we do a careful check)
+      // Check if the ride is still available with a simpler query
+      console.log('Checking if ride is still available...');
       const { data: rideCheck, error: rideCheckError } = await supabase
         .from('ride_requests')
-        .select('*')
+        .select('status, driver_id')
         .eq('id', rideId)
-        .eq('status', 'pending')
-        .is('driver_id', null)
         .maybeSingle();
         
       if (rideCheckError) {
@@ -169,14 +160,20 @@ export const driverService = {
         throw new Error('Failed to check ride status');
       }
       
+      // Check if ride exists and is still pending
       if (!rideCheck) {
-        console.error('Ride not available:', rideId);
-        throw new Error('This ride is no longer available. Another driver may have accepted it.');
+        console.error('Ride not found:', rideId);
+        throw new Error('This ride is no longer available');
       }
       
-      console.log('Ride check succeeded, ride is available:', rideCheck);
+      if (rideCheck.status !== 'pending' || rideCheck.driver_id) {
+        console.error('Ride already taken:', rideCheck);
+        throw new Error('This ride has already been accepted by a driver');
+      }
       
-      // Step 2: Try to update the ride with driver info
+      console.log('Ride is available, attempting to accept it...');
+      
+      // Try to update the ride with driver info
       const { data: rideData, error: rideError } = await supabase
         .from('ride_requests')
         .update({ 
@@ -187,21 +184,33 @@ export const driverService = {
         .eq('id', rideId)
         .eq('status', 'pending')  // Ensure it's still pending
         .is('driver_id', null)    // Ensure no driver has taken it
-        .select()
+        .select('*')
         .maybeSingle();
         
       if (rideError) {
         console.error('Error updating ride status:', rideError);
-        throw new Error(rideError.message || 'Failed to accept ride');
+        throw new Error('Failed to accept ride. Please try again.');
       }
       
       if (!rideData) {
-        throw new Error('Failed to accept ride. The ride may have been accepted by another driver.');
+        console.error('No data returned from ride update');
+        // Double check if someone else took it in the meantime
+        const { data: rideAfterAttempt } = await supabase
+          .from('ride_requests')
+          .select('status, driver_id')
+          .eq('id', rideId)
+          .maybeSingle();
+          
+        if (rideAfterAttempt && rideAfterAttempt.driver_id && rideAfterAttempt.driver_id !== driverId) {
+          throw new Error('Another driver accepted this ride while you were trying to accept it');
+        } else {
+          throw new Error('Failed to accept ride. Please try again.');
+        }
       }
       
       console.log('Ride accepted successfully:', rideData);
         
-      // Step 3: Update driver status to 'busy'
+      // Update driver status to 'busy'
       const { data: updatedDriver, error: driverUpdateError } = await supabase
         .from('drivers')
         .update({ is_available: false })
@@ -212,6 +221,7 @@ export const driverService = {
       if (driverUpdateError) {
         console.error('Error updating driver status:', driverUpdateError);
         // Don't throw here, as the ride was already accepted
+        console.log('Proceeding despite driver status update error');
       } else {
         console.log('Driver status updated to busy:', updatedDriver);
         
