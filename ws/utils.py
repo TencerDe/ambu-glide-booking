@@ -3,6 +3,10 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from drivers.models import Driver
 from rides.serializers import RideDetailSerializer
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 def notify_available_drivers(ride):
     """Notify all available drivers about a new ride request"""
@@ -15,25 +19,38 @@ def notify_available_drivers(ride):
     
     # Send notification to each available driver
     for driver in available_drivers:
-        async_to_sync(channel_layer.group_send)(
-            f'driver_{driver.user.id}_notifications',
-            {
-                'type': 'ride_notification',
-                'ride': ride_data
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                f'driver_{driver.user.id}_notifications',
+                {
+                    'type': 'ride_notification',
+                    'ride': ride_data
+                }
+            )
+            logger.info(f"Notified driver {driver.id} about ride {ride.id}")
+        except Exception as e:
+            logger.error(f"Failed to notify driver {driver.id}: {str(e)}")
 
 def send_ride_update(ride):
-    """Send ride status update to the user"""
+    """Send ride status update to the user with improved reliability"""
     channel_layer = get_channel_layer()
     
     ride_data = RideDetailSerializer(ride).data
     
-    # Send update to user
-    async_to_sync(channel_layer.group_send)(
-        f'user_{ride.user.id}_ride_status',
-        {
-            'type': 'ride_status_update',
-            'ride': ride_data
-        }
-    )
+    # Ensure we have a user to notify
+    if not ride.user:
+        logger.warning(f"No user associated with ride {ride.id} for status update")
+        return
+    
+    try:
+        # Send update to user
+        async_to_sync(channel_layer.group_send)(
+            f'user_{ride.user.id}_ride_status',
+            {
+                'type': 'ride_status_update',
+                'ride': ride_data
+            }
+        )
+        logger.info(f"Sent ride update to user {ride.user.id} for ride {ride.id}: {ride.status}")
+    except Exception as e:
+        logger.error(f"Failed to send ride update to user {ride.user.id}: {str(e)}")

@@ -20,6 +20,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const [elapsed, setElapsed] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastChecked, setLastChecked] = useState<number>(Date.now());
   
   // Timer for elapsed time
   useEffect(() => {
@@ -37,7 +38,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Function to check ride status
+  // Function to check ride status with improved reliability
   const checkRideStatus = async () => {
     try {
       setIsLoading(true);
@@ -50,7 +51,8 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
           headers: {
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
           }
         }
       );
@@ -60,17 +62,21 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
       }
       
       const data = await response.json();
+      setLastChecked(Date.now());
       
       if (data && data.length > 0) {
         const rideData = data[0];
         
         // Update status if changed
         if (rideData.status !== status) {
+          console.log(`Ride status changed from ${status} to ${rideData.status}`);
           setStatus(rideData.status);
           
           // Show toast notification on status change
           if (rideData.status === 'accepted') {
-            toast.success('A driver has accepted your ride!');
+            toast.success('A driver has accepted your ride!', {
+              id: 'ride-accepted'
+            });
           } else if (rideData.status === 'en_route') {
             toast.success('Your driver is on the way!');
           } else if (rideData.status === 'picked_up') {
@@ -96,8 +102,9 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     }
   };
   
-  // Function to fetch driver information
+  // Function to fetch driver information with better error handling
   const fetchDriverInfo = async (driverId: string) => {
+    console.log(`Fetching driver info for driver ID: ${driverId}`);
     try {
       const response = await fetch(
         `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}&select=*`,
@@ -106,7 +113,8 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
           headers: {
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
           }
         }
       );
@@ -118,7 +126,12 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
       const drivers = await response.json();
       
       if (drivers && drivers.length > 0) {
+        console.log('Driver info received:', drivers[0]);
         setDriverInfo(drivers[0]);
+        // Show success toast that driver info was loaded
+        toast.success(`Your driver ${drivers[0].name} is on the way!`);
+      } else {
+        console.log('No driver info found for ID:', driverId);
       }
     } catch (error) {
       console.error('Error fetching driver info:', error);
@@ -129,7 +142,9 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const handleCancel = async () => {
     try {
       setIsLoading(true);
-      toast.loading('Cancelling ride...');
+      toast.loading('Cancelling ride...', {
+        id: 'cancel-ride'
+      });
       
       const response = await fetch(
         `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}`,
@@ -152,30 +167,36 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      toast.dismiss();
+      toast.dismiss('cancel-ride');
       toast.success('Ride cancelled successfully');
       setStatus('cancelled');
     } catch (error) {
       console.error('Error cancelling ride:', error);
-      toast.dismiss();
+      toast.dismiss('cancel-ride');
       toast.error('Failed to cancel ride. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
   
-  // Check ride status on mount and periodically
+  // More frequent polling for ride updates when in pending state
   useEffect(() => {
     // Check status immediately on mount
     checkRideStatus();
     
-    // Set up polling interval - more frequent when pending, less when accepted
+    // Set up polling interval - very frequent when pending (1 second), less when accepted
     const interval = setInterval(() => {
-      checkRideStatus();
-    }, status === 'pending' ? 2000 : 5000);
+      // If too much time has passed without an update, force refresh
+      const timeWithoutUpdate = Date.now() - lastChecked;
+      const shouldForceFetch = timeWithoutUpdate > 15000; // 15 seconds
+      
+      if (shouldForceFetch || (status === 'pending')) {
+        checkRideStatus();
+      }
+    }, status === 'pending' ? 1000 : 3000);
     
     return () => clearInterval(interval);
-  }, [rideId, status]);
+  }, [rideId, status, lastChecked]);
   
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -185,6 +206,14 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
         {error && (
           <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
             {error}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={checkRideStatus} 
+              className="ml-2 text-xs"
+            >
+              Retry
+            </Button>
           </div>
         )}
         

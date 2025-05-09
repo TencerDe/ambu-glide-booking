@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from .serializers import RideCreateSerializer, RideDetailSerializer
 from .models import Ride
 from django.shortcuts import get_object_or_404
-from ws.utils import notify_available_drivers
+from ws.utils import notify_available_drivers, send_ride_update
 
 class BookRideView(APIView):
     def post(self, request):
@@ -49,7 +49,7 @@ class RideDetailView(APIView):
         return Response(RideDetailSerializer(ride).data)
 
 class RideAcceptanceView(APIView):
-    """New dedicated API for ride acceptance with transaction guarantees"""
+    """Dedicated API for ride acceptance with transaction guarantees and immediate user notification"""
     def post(self, request):
         ride_id = request.data.get('ride_id')
         driver_id = request.data.get('driver_id')
@@ -78,8 +78,7 @@ class RideAcceptanceView(APIView):
                 driver.status = 'BUSY'
                 driver.save()
                 
-                # Notify the user
-                from ws.utils import send_ride_update
+                # Immediately notify the user about ride acceptance
                 send_ride_update(ride)
                 
                 return Response(RideDetailSerializer(ride).data, status=status.HTTP_200_OK)
