@@ -6,7 +6,8 @@ type DriverStatus = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 
 /**
  * Update driver status in the database
- * This implementation focuses on stability and proper persistence of the status
+ * This implementation uses the Supabase client directly instead of REST API
+ * for better reliability and built-in error handling
  */
 export const updateDriverStatus = async (
   newStatus: DriverStatus
@@ -29,7 +30,7 @@ export const updateDriverStatus = async (
       console.log('🔍 Checking for active rides before setting status to AVAILABLE');
       
       try {
-        // Use the built-in Supabase client for this query as it's more reliable for querying
+        // Use the Supabase client for querying - more reliable than direct REST API calls
         const { data: activeRides, error } = await supabase
           .from('ride_requests')
           .select('id')
@@ -38,7 +39,10 @@ export const updateDriverStatus = async (
         
         console.log('📊 Active rides check result:', activeRides);
         
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Error checking active rides:', error);
+          throw error;
+        }
         
         if (activeRides && activeRides.length > 0) {
           console.warn('⚠️ Driver has active rides, cannot set status to AVAILABLE');
@@ -47,9 +51,12 @@ export const updateDriverStatus = async (
             error: 'Cannot set status to Available while you have active rides' 
           };
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error checking active rides:', error);
-        // Continue with update anyway, but log the error
+        return { 
+          success: false, 
+          error: error.message || 'Error checking active rides' 
+        };
       }
     }
     

@@ -18,7 +18,7 @@ export const directRequest = async (
 ) => {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${endpoint}`);
   
-  // Separate Prefer header from query parameters
+  // Handle the prefer header separately - it should be sent as an actual header, not a query parameter
   let preferHeader = '';
   if (queryParams['prefer']) {
     preferHeader = queryParams['prefer'];
@@ -30,7 +30,7 @@ export const directRequest = async (
     url.searchParams.append(key, value);
   });
   
-  // Create a new headers object instead of modifying options.headers
+  // Create a new headers object with the required Supabase headers
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'apikey': SUPABASE_KEY,
@@ -39,10 +39,18 @@ export const directRequest = async (
   
   // Safely add any additional headers from options
   if (options.headers) {
-    const optionsHeaders = options.headers as Record<string, string>;
-    Object.keys(optionsHeaders).forEach(key => {
-      headers[key] = optionsHeaders[key];
-    });
+    // Convert Headers object to a plain object if needed
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else {
+      // Handle plain object headers
+      const optionsHeaders = options.headers as Record<string, string>;
+      Object.keys(optionsHeaders).forEach(key => {
+        headers[key] = optionsHeaders[key];
+      });
+    }
   }
   
   // Add Prefer header if it exists
@@ -52,6 +60,8 @@ export const directRequest = async (
   
   try {
     console.log(`🔄 API Request: ${options.method || 'GET'} ${url.toString()}`);
+    console.log('📤 Request Headers:', headers);
+    
     if (options.body) {
       console.log('📦 Request Body:', options.body);
     }
@@ -112,6 +122,9 @@ export const insertItems = (endpoint: string, data: any) => {
  * Update items in a table
  */
 export const updateItem = (endpoint: string, data: any, conditions: Record<string, string>) => {
+  // Remove prefer from conditions and set as header
+  const queryParams = { ...conditions };
+  
   return directRequest(
     endpoint,
     {
@@ -119,7 +132,7 @@ export const updateItem = (endpoint: string, data: any, conditions: Record<strin
       body: JSON.stringify(data)
     },
     {
-      ...conditions,
+      ...queryParams,
       prefer: 'return=representation'
     }
   );
