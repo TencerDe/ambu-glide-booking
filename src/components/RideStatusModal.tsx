@@ -21,6 +21,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastChecked, setLastChecked] = useState<number>(Date.now());
+  const [forceRefresh, setForceRefresh] = useState<boolean>(false);
   
   // Timer for elapsed time
   useEffect(() => {
@@ -38,6 +39,65 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Connect to WebSocket for real-time updates if available
+  useEffect(() => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+    
+    // Try to connect to WebSocket
+    try {
+      const wsUrl = process.env.NODE_ENV === 'production' 
+        ? `wss://${window.location.host}/ws/user/${userId}/ride-status/` 
+        : `ws://localhost:8000/ws/user/${userId}/ride-status/`;
+        
+      const socket = new WebSocket(wsUrl);
+      
+      socket.onopen = () => {
+        console.log('WebSocket connected for ride updates');
+      };
+      
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'ride_status_update' && data.ride && data.ride.id === rideId) {
+            console.log('Received WebSocket update for ride:', data.ride);
+            
+            // Update status if changed
+            if (data.ride.status !== status) {
+              setStatus(data.ride.status);
+              
+              // Show toast notification
+              if (data.ride.status === 'accepted') {
+                toast.success('A driver has accepted your ride!', { id: 'ride-accepted' });
+              }
+            }
+            
+            // Fetch driver info if needed
+            if ((data.ride.status === 'accepted' || data.ride.status === 'en_route' || 
+                data.ride.status === 'picked_up') && data.ride.driver_id && !driverInfo) {
+              fetchDriverInfo(data.ride.driver_id);
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+      
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Will fall back to polling
+      };
+      
+      return () => {
+        socket.close();
+      };
+    } catch (error) {
+      console.error('Failed to connect to WebSocket:', error);
+      // Will fall back to polling
+    }
+  }, [rideId, status]);
+
   // Function to check ride status with improved reliability
   const checkRideStatus = async () => {
     try {
@@ -52,7 +112,8 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
             'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'Prefer': 'return=representation'
           }
         }
       );
@@ -66,6 +127,8 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
       
       if (data && data.length > 0) {
         const rideData = data[0];
+        
+        console.log('Ride status check result:', rideData);
         
         // Update status if changed
         if (rideData.status !== status) {
@@ -178,25 +241,32 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
       setIsLoading(false);
     }
   };
+
+  // Handle manual refresh
+  const handleManualRefresh = () => {
+    setForceRefresh(prev => !prev);
+    checkRideStatus();
+    toast.info('Refreshing ride status...');
+  };
   
-  // More frequent polling for ride updates when in pending state
+  // More frequent polling for ride updates when in pending state or after force refresh
   useEffect(() => {
-    // Check status immediately on mount
+    // Check status immediately on mount or force refresh
     checkRideStatus();
     
-    // Set up polling interval - very frequent when pending (1 second), less when accepted
+    // Set up polling interval - very frequent when pending (0.8 seconds), less when accepted
     const interval = setInterval(() => {
       // If too much time has passed without an update, force refresh
       const timeWithoutUpdate = Date.now() - lastChecked;
-      const shouldForceFetch = timeWithoutUpdate > 15000; // 15 seconds
+      const shouldForceFetch = timeWithoutUpdate > 5000; // 5 seconds
       
       if (shouldForceFetch || (status === 'pending')) {
         checkRideStatus();
       }
-    }, status === 'pending' ? 1000 : 3000);
+    }, status === 'pending' ? 800 : 3000);
     
     return () => clearInterval(interval);
-  }, [rideId, status, lastChecked]);
+  }, [rideId, status, lastChecked, forceRefresh]);
   
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -209,7 +279,7 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={checkRideStatus} 
+              onClick={handleManualRefresh} 
               className="ml-2 text-xs"
             >
               Retry
@@ -246,6 +316,14 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
                 </div>
                 <p className="text-gray-600">Looking for a nearby driver...</p>
                 <p className="text-sm text-gray-500 mt-1">This may take a few minutes</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleManualRefresh} 
+                  className="mt-3"
+                >
+                  Refresh Status
+                </Button>
               </div>
             ) : status === 'cancelled' ? (
               <div className="text-center py-4">

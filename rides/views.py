@@ -78,8 +78,18 @@ class RideAcceptanceView(APIView):
                 driver.status = 'BUSY'
                 driver.save()
                 
-                # Immediately notify the user about ride acceptance
-                send_ride_update(ride)
+                # Immediately notify the user about ride acceptance - with retry mechanism
+                for attempt in range(3):  # Try 3 times at most
+                    try:
+                        print(f"Sending ride update to user {ride.user.id} (attempt {attempt+1})")
+                        send_ride_update(ride)
+                        break  # Successfully sent notification, exit retry loop
+                    except Exception as e:
+                        if attempt == 2:  # Last attempt
+                            print(f"Failed to notify user after 3 attempts: {str(e)}")
+                        else:
+                            import time
+                            time.sleep(0.5)  # Wait half a second before retrying
                 
                 return Response(RideDetailSerializer(ride).data, status=status.HTTP_200_OK)
                 
