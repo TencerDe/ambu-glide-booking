@@ -92,28 +92,134 @@ export const driverService = {
     }
   },
 
-  // Use both service methods to guarantee success
+  // Simplified ride acceptance method that uses a direct approach
   acceptRide: async (rideId: string) => {
     try {
       console.log(`Beginning ride acceptance process for ride ${rideId}`);
+      const driverId = localStorage.getItem('driverId');
       
-      // First try with the Supabase client
-      const result = await rideAcceptanceService.acceptRide(rideId);
-      
-      if (!result.success) {
-        console.log('First attempt failed, trying direct API method');
-        // If that fails, try with the direct API method
-        const directResult = await rideAcceptanceService.directAcceptRide(rideId);
-        if (!directResult.success) {
-          throw new Error(directResult.message);
-        }
-        return { data: { message: directResult.message, ride: directResult.ride } };
+      if (!driverId) {
+        throw new Error('Driver not authenticated');
       }
       
-      return { data: { message: result.message, ride: result.ride } };
+      // First, check if driver is available
+      const { data: driverData, error: driverError } = await supabase
+        .from('drivers')
+        .select('is_available')
+        .eq('id', driverId)
+        .single();
+        
+      if (driverError || !driverData) {
+        throw new Error('Failed to verify driver availability');
+      }
+      
+      if (!driverData.is_available) {
+        throw new Error('You already have an active ride');
+      }
+      
+      // Check ride availability using a direct REST call to avoid content negotiation issues
+      const checkRideResponse = await fetch(
+        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&status=eq.pending&select=*`,
+        {
+          method: "GET",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.pgrst.object+json"
+          }
+        }
+      );
+      
+      if (!checkRideResponse.ok) {
+        throw new Error(`Failed to check ride availability: ${checkRideResponse.statusText}`);
+      }
+      
+      const rideData = await checkRideResponse.json();
+      if (!rideData || rideData.length === 0) {
+        throw new Error('This ride is no longer available');
+      }
+      
+      // Set driver as unavailable
+      const updateDriverResponse = await fetch(
+        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+          },
+          body: JSON.stringify({
+            is_available: false
+          })
+        }
+      );
+      
+      if (!updateDriverResponse.ok) {
+        throw new Error(`Failed to update driver status: ${updateDriverResponse.statusText}`);
+      }
+      
+      // Update ride with driver info - critical fix to use the right content negotiation
+      const updateRideResponse = await fetch(
+        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.pgrst.object+json",
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify({
+            status: "accepted",
+            driver_id: driverId,
+            updated_at: new Date().toISOString()
+          })
+        }
+      );
+      
+      if (!updateRideResponse.ok) {
+        // Rollback driver availability
+        await fetch(
+          `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+              "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+              "Content-Type": "application/json",
+              "Prefer": "return=minimal"
+            },
+            body: JSON.stringify({
+              is_available: true
+            })
+          }
+        );
+        throw new Error(`Failed to update ride: ${updateRideResponse.statusText}`);
+      }
+      
+      const updatedRide = await updateRideResponse.json();
+      
+      // Update local storage with new driver status
+      const driverDataStr = localStorage.getItem('driverData');
+      if (driverDataStr) {
+        try {
+          const driverObj = JSON.parse(driverDataStr);
+          driverObj.is_available = false;
+          localStorage.setItem('driverData', JSON.stringify(driverObj));
+        } catch (e) {
+          console.error('Error updating driver data in localStorage:', e);
+        }
+      }
+      
+      console.log('Ride accepted successfully:', updatedRide);
+      return { data: { message: 'Ride accepted successfully', ride: updatedRide } };
     } catch (error: any) {
-      console.error('All acceptance methods failed:', error);
-      throw new Error(error.message || 'Failed to accept ride after all attempts');
+      console.error('Error accepting ride:', error);
+      throw new Error(error.message || 'Failed to accept ride');
     }
   },
 
@@ -153,38 +259,108 @@ export const driverService = {
         throw new Error('Driver not authenticated');
       }
       
-      // Get the driver's current active ride
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .select('*')
-        .eq('driver_id', driverId)
-        .in('status', ['accepted', 'en_route', 'picked_up'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(); 
-        
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows returned" which is not an error
-        console.error('Error fetching current ride:', error);
-        throw error;
+      // Get the driver's current active ride using direct API call for reliability
+      const response = await fetch(
+        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?driver_id=eq.${driverId}&or=(status.eq.accepted,status.eq.en_route,status.eq.picked_up)&order=created_at.desc&limit=1`,
+        {
+          method: "GET",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch current ride: ${response.statusText}`);
       }
       
-      return { data };
+      const rides = await response.json();
+      return { data: rides && rides.length > 0 ? rides[0] : null };
     } catch (error: any) {
       console.error('Error in getCurrentRide:', error);
-      if (error.code === 'PGRST116') {
-        return { data: null }; // No current ride
-      }
       throw new Error(error.message || 'Failed to get current ride');
     }
   },
 
-  // Delegate ride status updates to the new specialized service
+  // Direct implementation for updating ride status without relying on a separate service
   updateRideStatus: async (rideId: string, status: string, location?: { lat: number, lng: number }) => {
-    const result = await rideAcceptanceService.updateRideStatus(rideId, status, location);
-    if (!result.success) {
-      throw new Error(result.message);
+    const driverId = localStorage.getItem('driverId');
+    
+    if (!driverId) {
+      throw new Error('Driver not authenticated');
     }
-    return { data: { message: result.message } };
+    
+    try {
+      // Prepare update data
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add location if provided
+      if (location) {
+        updateData.driver_latitude = location.lat;
+        updateData.driver_longitude = location.lng;
+      }
+      
+      // Update ride status using direct API call
+      const response = await fetch(
+        `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&driver_id=eq.${driverId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify(updateData)
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update ride status: ${response.statusText}`);
+      }
+      
+      // If ride is completed, update driver availability
+      if (status === 'completed') {
+        await fetch(
+          `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${driverId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+              "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo",
+              "Content-Type": "application/json",
+              "Prefer": "return=minimal"
+            },
+            body: JSON.stringify({
+              is_available: true
+            })
+          }
+        );
+        
+        // Update local storage
+        const driverDataStr = localStorage.getItem('driverData');
+        if (driverDataStr) {
+          try {
+            const driverData = JSON.parse(driverDataStr);
+            driverData.is_available = true;
+            localStorage.setItem('driverData', JSON.stringify(driverData));
+          } catch (e) {
+            console.error('Error updating driver data in localStorage:', e);
+          }
+        }
+      }
+      
+      return { data: { message: `Ride status updated to ${status}` } };
+    } catch (error: any) {
+      console.error('Error updating ride status:', error);
+      throw new Error(error.message || 'Failed to update ride status');
+    }
   },
 
   logout: () => {
