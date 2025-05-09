@@ -30,12 +30,20 @@ export const directRequest = async (
     url.searchParams.append(key, value);
   });
   
+  // Create a new headers object instead of modifying options.headers
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${SUPABASE_KEY}`,
-    ...(options.headers || {})
+    'Authorization': `Bearer ${SUPABASE_KEY}`
   };
+  
+  // Safely add any additional headers from options
+  if (options.headers) {
+    const optionsHeaders = options.headers as Record<string, string>;
+    Object.keys(optionsHeaders).forEach(key => {
+      headers[key] = optionsHeaders[key];
+    });
+  }
   
   // Add Prefer header if it exists
   if (preferHeader) {
