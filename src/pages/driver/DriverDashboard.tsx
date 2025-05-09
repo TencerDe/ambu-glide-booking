@@ -1,9 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { driverService } from '@/services/driverService';
-import { toggleDriverStatus } from '@/services/driverStatusService';
 import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building, Check, Navigation } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -35,7 +34,6 @@ const DriverDashboard = () => {
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentRide, setCurrentRide] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [statusLoading, setStatusLoading] = useState<boolean>(false);
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -107,15 +105,6 @@ const DriverDashboard = () => {
         // Update local state
         setCurrentRide(result.data.ride);
         setRideRequests([]);
-        
-        // Update driver profile to reflect busy status
-        if (driverProfile) {
-          setDriverProfile({
-            ...driverProfile,
-            is_available: false,
-            status: 'BUSY'
-          });
-        }
       } else {
         toast.dismiss();
         toast.error(result.error || 'Failed to accept ride');
@@ -207,37 +196,6 @@ const DriverDashboard = () => {
     }
   };
 
-  // Toggle driver availability status using our dedicated service
-  const handleToggleDriverStatus = async () => {
-    if (!driverProfile) return;
-    
-    // Don't allow changing status if there's an active ride
-    if (currentRide && driverProfile.status === 'BUSY') {
-      toast.error('You cannot change status while having an active ride');
-      return;
-    }
-    
-    try {
-      setStatusLoading(true);
-      
-      // Use our simplified toggle function with clear feedback
-      await toggleDriverStatus(
-        driverProfile.status,
-        (updatedDriverData) => {
-          setDriverProfile({
-            ...driverProfile,
-            ...updatedDriverData
-          });
-        }
-      );
-    } catch (error: any) {
-      console.error('Error toggling status:', error);
-      toast.error(error.message || 'Failed to update status');
-    } finally {
-      setStatusLoading(false);
-    }
-  };
-
   const handleManualRefresh = () => {
     fetchData();
     toast.info('Refreshing ride requests...');
@@ -308,38 +266,6 @@ const DriverDashboard = () => {
                   <div>
                     <p className="text-sm text-gray-500">Username</p>
                     <p className="font-medium">{driverProfile.username}</p>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Status</p>
-                      <p className={`font-medium ${
-                        driverProfile.status === 'AVAILABLE' 
-                          ? 'text-green-600' 
-                          : driverProfile.status === 'BUSY' 
-                            ? 'text-red-600' 
-                            : 'text-gray-600'
-                      }`}>
-                        {driverProfile.status === 'AVAILABLE' 
-                          ? 'Available'
-                          : driverProfile.status === 'BUSY'
-                            ? 'Busy'
-                            : 'Offline'}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="driver-status"
-                        checked={driverProfile.status === 'AVAILABLE'}
-                        onCheckedChange={handleToggleDriverStatus}
-                        disabled={statusLoading || (currentRide && driverProfile.status === 'BUSY')}
-                        className={currentRide && driverProfile.status === 'BUSY' ? 'opacity-50 cursor-not-allowed' : ''}
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        {driverProfile.status === 'AVAILABLE' ? 'Available' : 'Offline'}
-                      </span>
-                    </div>
                   </div>
                   
                   {driverProfile.phone_number && (
@@ -524,15 +450,13 @@ const DriverDashboard = () => {
                         <Button
                           className="w-full mt-4 gradient-bg btn-animate"
                           onClick={() => handleAcceptRide(request.id)}
-                          disabled={acceptingRide === request.id || driverProfile?.status !== 'AVAILABLE'}
+                          disabled={acceptingRide === request.id}
                         >
                           {acceptingRide === request.id ? (
                             <span className="flex items-center">
                               <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
                               Processing...
                             </span>
-                          ) : driverProfile?.status !== 'AVAILABLE' ? (
-                            'You must be Available to accept rides'
                           ) : (
                             `Accept Ride (₹${request.charge?.toLocaleString()})`
                           )}

@@ -51,24 +51,7 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
             data = json.loads(text_data)
             message_type = data.get('type')
             
-            if message_type == 'status_update':
-                status = data.get('status')
-                success = await self.update_driver_status(self.driver_id, status)
-                
-                if success:
-                    await self.send(text_data=json.dumps({
-                        'type': 'status_updated',
-                        'status': status,
-                        'success': True
-                    }))
-                else:
-                    await self.send(text_data=json.dumps({
-                        'type': 'status_updated',
-                        'status': status,
-                        'success': False,
-                        'error': 'Failed to update status'
-                    }))
-            elif message_type == 'ping':
+            if message_type == 'ping':
                 # Handle ping messages to keep connection alive
                 await self.send(text_data=json.dumps({
                     'type': 'pong',
@@ -108,25 +91,6 @@ class DriverNotificationConsumer(AsyncWebsocketConsumer):
             return user.user_type == 'DRIVER'
         except User.DoesNotExist:
             logger.warning(f"User {user_id} not found when checking if driver")
-            return False
-    
-    @database_sync_to_async
-    def update_driver_status(self, user_id, status):
-        try:
-            driver = Driver.objects.get(user_id=user_id)
-            if status in [choice[0] for choice in Driver.STATUS_CHOICES]:
-                previous_status = driver.status
-                driver.status = status
-                driver.save()
-                logger.info(f"Driver {user_id} status changed from {previous_status} to {status}")
-                return True
-            logger.warning(f"Invalid status '{status}' attempted for driver {user_id}")
-            return False
-        except Driver.DoesNotExist:
-            logger.error(f"Driver with user_id {user_id} not found")
-            return False
-        except Exception as e:
-            logger.error(f"Error updating driver status: {str(e)}")
             return False
 
 class UserRideStatusConsumer(AsyncWebsocketConsumer):

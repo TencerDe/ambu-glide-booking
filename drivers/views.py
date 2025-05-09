@@ -73,54 +73,6 @@ class DriverProfileView(APIView):
             logger.error(f"Driver profile not found for user {request.user.id}")
             return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
-class DriverStatusView(APIView):
-    def post(self, request):
-        try:
-            driver = request.user.driver
-            new_status = request.data.get('status')
-            
-            logger.info(f"Driver {driver.id} status update request: {new_status}")
-            
-            if new_status not in [choice[0] for choice in Driver.STATUS_CHOICES]:
-                logger.warning(f"Invalid status update request: {new_status}")
-                return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check if driver is trying to set status to AVAILABLE but has active rides
-            if new_status == 'AVAILABLE':
-                # Check for any active rides
-                active_rides = Ride.objects.filter(
-                    driver=driver,
-                    status__in=['ACCEPTED', 'EN_ROUTE', 'PICKED_UP']
-                ).exists()
-                
-                if active_rides:
-                    logger.warning(f"Driver {driver.id} attempted to set status to AVAILABLE with active rides")
-                    return Response({
-                        'error': 'Cannot set status to Available while you have active rides'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Update driver status within transaction
-            with transaction.atomic():
-                # Get fresh instance with select_for_update to prevent race conditions
-                driver_refresh = Driver.objects.select_for_update().get(id=driver.id)
-                driver_refresh.status = new_status
-                driver_refresh.is_available = (new_status == 'AVAILABLE')
-                driver_refresh.save()
-            
-            logger.info(f"Driver {driver.id} status updated to {new_status}")
-            
-            # Return the complete updated driver data
-            driver = Driver.objects.get(id=driver.id)  # Get fresh instance
-            serializer = DriverSerializer(driver)
-            return Response(serializer.data)
-            
-        except Driver.DoesNotExist:
-            logger.error(f"Driver profile not found for user {request.user.id}")
-            return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error updating driver status: {str(e)}", exc_info=True)
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class AcceptRideView(APIView):
     def post(self, request):
         ride_id = request.data.get('ride_id')
@@ -137,14 +89,6 @@ class AcceptRideView(APIView):
                 driver = Driver.objects.select_for_update().get(user=request.user)
                 ride = Ride.objects.select_for_update().get(id=ride_id, status='REQUESTED')
                 
-                # Check if the driver is available
-                if driver.status != 'AVAILABLE':
-                    logger.warning(f"Driver {driver.id} is not available (status: {driver.status})")
-                    return Response({
-                        'error': 'You must be available to accept rides',
-                        'code': 'DRIVER_NOT_AVAILABLE'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
                 # Update the ride
                 ride.driver = driver
                 ride.status = 'ACCEPTED'
@@ -152,7 +96,6 @@ class AcceptRideView(APIView):
                 
                 # Update the driver status
                 driver.status = 'BUSY'
-                driver.is_available = False
                 driver.save()
                 
                 logger.info(f"Ride {ride_id} accepted by driver {driver.id} successfully")
