@@ -1,3 +1,4 @@
+
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { insertItems } from './supabaseUtils';
@@ -92,11 +93,36 @@ export const userService = {
       
       console.log('Sending ride data to Supabase:', rideData);
       
-      // Use insertItems to bypass type checking for ride_requests table
-      const responseData = await insertItems('ride_requests', rideData);
+      // Use Supabase client to insert data
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .insert(rideData)
+        .select()
+        .single();
       
-      console.log('Booking successful, response:', responseData);
-      return { data: responseData };
+      if (error) {
+        console.error('Error inserting ride request to Supabase:', error);
+        throw new Error(error.message || 'Failed to book ambulance');
+      }
+      
+      if (!data) {
+        throw new Error('No data returned from Supabase');
+      }
+      
+      console.log('Booking successful, response:', data);
+      
+      // Save booking ID to localStorage for status tracking
+      if (data.id) {
+        localStorage.setItem('lastRideId', data.id);
+      }
+      
+      // Generate a temporary user ID if one doesn't exist
+      if (!localStorage.getItem('userId')) {
+        const tempUserId = 'user_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('userId', tempUserId);
+      }
+      
+      return { data };
       
     } catch (error: any) {
       console.error('Error in bookRide:', error);
@@ -107,6 +133,25 @@ export const userService = {
       
       // Return a structured error response instead of using the API fallback
       throw new Error(errorMessage);
+    }
+  },
+
+  getRideStatus: async (rideId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .select(`
+          *,
+          driver:driver_id(*)
+        `)
+        .eq('id', rideId)
+        .single();
+      
+      if (error) throw error;
+      return { data };
+    } catch (error: any) {
+      console.error('Error getting ride status:', error);
+      throw new Error(error.message || 'Failed to get ride status');
     }
   },
 

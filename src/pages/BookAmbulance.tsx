@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { MapPin, Search } from 'lucide-react';
 import BookingModal from '@/components/BookingModal';
+import RideStatusModal from '@/components/RideStatusModal';
+import { supabase } from '@/integrations/supabase/client';
 
 // Add a type definition for the Google Maps window global
 declare global {
@@ -26,8 +28,9 @@ interface Location {
 const BookAmbulance = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
-  const [ambulanceBooked, setAmbulanceBooked] = useState<boolean>(false);
-  const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [showBookingModal, setShowBookingModal] = useState<boolean>(false);
+  const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
+  const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const [searchAddress, setSearchAddress] = useState<string>('');
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -37,7 +40,6 @@ const BookAmbulance = () => {
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
 
   // Get current location on component mount
   useEffect(() => {
@@ -163,52 +165,7 @@ const BookAmbulance = () => {
   }, [googleMapsLoaded, searchAddress]);
 
   // Simulate driver movement when ambulance is booked
-  useEffect(() => {
-    let intervalId: number;
-    
-    if (ambulanceBooked && currentLocation) {
-      // Start with a position that's a bit away from the user
-      const startLat = currentLocation.lat + 0.02;
-      const startLng = currentLocation.lng - 0.02;
-      
-      setDriverLocation({ lat: startLat, lng: startLng });
-      updateDriverMarker(startLat, startLng);
-      
-      // Move the driver marker towards the user's location
-      let step = 0;
-      const totalSteps = 20;
-      
-      intervalId = window.setInterval(() => {
-        if (step < totalSteps && currentLocation) {
-          step++;
-          const progress = step / totalSteps;
-          
-          const newLat = startLat - (progress * 0.02);
-          const newLng = startLng + (progress * 0.02);
-          
-          setDriverLocation({ lat: newLat, lng: newLng });
-          updateDriverMarker(newLat, newLng);
-          
-          // Update map to show both markers
-          if (mapRef.current && currentLocation && window.google) {
-            const bounds = new window.google.maps.LatLngBounds();
-            bounds.extend(new window.google.maps.LatLng(currentLocation.lat, currentLocation.lng));
-            bounds.extend(new window.google.maps.LatLng(newLat, newLng));
-            mapRef.current.fitBounds(bounds);
-          }
-        } else {
-          clearInterval(intervalId);
-          if (step >= totalSteps) {
-            toast.success("Driver has arrived at your location!");
-          }
-        }
-      }, 1000);
-    }
-    
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [ambulanceBooked]);
+  
 
   const initMap = (lat: number, lng: number) => {
     if (!mapContainerRef.current || !window.google) return;
@@ -235,7 +192,7 @@ const BookAmbulance = () => {
     
     // Allow clicking on map to update location
     mapRef.current.addListener("click", (e: google.maps.MapMouseEvent) => {
-      if (e.latLng && !ambulanceBooked) {
+      if (e.latLng && !showStatusModal) {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
         
@@ -346,9 +303,8 @@ const BookAmbulance = () => {
   const updateDriverMarker = (lat: number, lng: number) => {
     if (!mapRef.current || !window.google) return;
     
-    if (driverMarkerRef.current) {
-      driverMarkerRef.current.setPosition({ lat, lng });
-    } else {
+    // If this is the first update, center the map on both markers
+    if (!driverMarkerRef.current) {
       driverMarkerRef.current = new window.google.maps.Marker({
         position: { lat, lng },
         map: mapRef.current,
@@ -356,9 +312,107 @@ const BookAmbulance = () => {
         icon: {
           url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
         },
+        animation: google.maps.Animation.DROP
       });
+      
+      // Fit map to show both markers
+      if (currentLocation && mapRef.current) {
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(new google.maps.LatLng(currentLocation.lat, currentLocation.lng));
+        bounds.extend(new google.maps.LatLng(lat, lng));
+        mapRef.current.fitBounds(bounds);
+      }
+    } else {
+      // Animate the marker movement
+      animateMarkerTo(driverMarkerRef.current, lat, lng);
     }
   };
+  
+  // Animate marker movement for smoother updates
+  const animateMarkerTo = (marker: google.maps.Marker, newLat: number, newLng: number) => {
+    const startLat = marker.getPosition()?.lat() || 0;
+    const startLng = marker.getPosition()?.lng() || 0;
+    const frames = 30;
+    let frame = 0;
+    
+    const animate = () => {
+      frame++;
+      if (frame <= frames) {
+        const progress = frame / frames;
+        const lat = startLat + (newLat - startLat) * progress;
+        const lng = startLng + (newLng - startLng) * progress;
+        marker.setPosition(new google.maps.LatLng(lat, lng));
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  };
+
+  // Check for active ride on component mount
+  useEffect(() => {
+    const lastRideId = localStorage.getItem('lastRideId');
+    if (lastRideId) {
+      // Check if the ride is still active
+      const checkRideStatus = async () => {
+        try {
+          const { data: rideData } = await supabase
+            .from('ride_requests')
+            .select('*')
+            .eq('id', lastRideId)
+            .single();
+          
+          if (rideData && ['pending', 'accepted', 'en_route'].includes(rideData.status)) {
+            setCurrentRideId(lastRideId);
+            setShowStatusModal(true);
+          }
+        } catch (error) {
+          console.error('Error checking ride status:', error);
+        }
+      };
+      
+      checkRideStatus();
+    }
+  }, []);
+
+  // Subscribe to ride updates
+  useEffect(() => {
+    if (!currentRideId) return;
+    
+    // Subscribe to changes in this specific ride
+    const channel = supabase
+      .channel(`ride_${currentRideId}`)
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'ride_requests',
+          filter: `id=eq.${currentRideId}`
+        }, 
+        (payload) => {
+          console.log('Ride update received:', payload);
+          const updatedRide = payload.new;
+          
+          // If driver location updated, update the map
+          if (updatedRide.driver_latitude && updatedRide.driver_longitude) {
+            updateDriverMarker(updatedRide.driver_latitude, updatedRide.driver_longitude);
+          }
+          
+          // If ride completed, close the status modal
+          if (updatedRide.status === 'completed') {
+            toast.success('Your ride has been completed!');
+            setShowStatusModal(false);
+            localStorage.removeItem('lastRideId');
+            setCurrentRideId(null);
+          }
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentRideId]);
 
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -368,8 +422,14 @@ const BookAmbulance = () => {
       return;
     }
     
-    // Show the booking modal instead of directly booking
-    setShowModal(true);
+    // Show the booking modal
+    setShowBookingModal(true);
+  };
+
+  const handleBookingSuccess = (rideId: string) => {
+    setShowBookingModal(false);
+    setCurrentRideId(rideId);
+    setShowStatusModal(true);
   };
 
   return (
@@ -416,16 +476,6 @@ const BookAmbulance = () => {
                   <div>
                     <p className="font-medium">Your Location:</p>
                     <p className="text-gray-600">{currentLocation?.address || "Loading address..."}</p>
-                    {ambulanceBooked && driverLocation && (
-                      <p className="text-green-600 mt-2">
-                        Driver is {calculateDistance(
-                          currentLocation?.lat || 0, 
-                          currentLocation?.lng || 0, 
-                          driverLocation.lat, 
-                          driverLocation.lng
-                        ).toFixed(2)} km away
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -433,7 +483,7 @@ const BookAmbulance = () => {
             
             {/* Booking Form Section */}
             <div className="bg-white shadow-md rounded-lg p-6">
-              {!ambulanceBooked ? (
+              
                 <form onSubmit={handleFormSubmit} className="space-y-6">
                   <div>
                     <Label htmlFor="name">Your Name</Label>
@@ -477,65 +527,26 @@ const BookAmbulance = () => {
                     {loading ? "Searching..." : "Book Ambulance Now"}
                   </Button>
                 </form>
-              ) : (
-                <div className="space-y-6">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h3 className="text-xl font-semibold text-green-800 mb-2">Ambulance on the way!</h3>
-                    <p className="text-green-700">
-                      Your ambulance has been dispatched and will arrive shortly. 
-                      You can track the driver's location on the map.
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Driver Information:</h4>
-                    <div className="space-y-1">
-                      <p><span className="font-medium">Name:</span> John Driver</p>
-                      <p><span className="font-medium">Vehicle:</span> Ambulance #A-125</p>
-                      <p><span className="font-medium">ETA:</span> 5-7 minutes</p>
-                    </div>
-                  </div>
-                  
-                  <Button 
-                    className="w-full bg-red-600 hover:bg-red-700"
-                    onClick={() => {
-                      toast.info("Emergency services have been notified of increased urgency");
-                    }}
-                  >
-                    This is extremely urgent!
-                  </Button>
-                  
-                  <Button 
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setAmbulanceBooked(false);
-                      setDriverLocation(null);
-                      if (driverMarkerRef.current) {
-                        driverMarkerRef.current.setMap(null);
-                        driverMarkerRef.current = null;
-                      }
-                      toast.info("Ambulance booking cancelled");
-                    }}
-                  >
-                    Cancel Ambulance
-                  </Button>
-                </div>
-              )}
+              
             </div>
           </div>
         </div>
       </main>
       
       {/* Booking Modal */}
-      {showModal && (
+      {showBookingModal && (
         <BookingModal 
-          onClose={() => setShowModal(false)} 
-          onBookingSuccess={() => {
-            setShowModal(false);
-            setAmbulanceBooked(true);
-          }}
+          onClose={() => setShowBookingModal(false)} 
+          onBookingSuccess={handleBookingSuccess}
           address={currentLocation?.address || ""}
+        />
+      )}
+      
+      {/* Ride Status Modal */}
+      {showStatusModal && currentRideId && (
+        <RideStatusModal 
+          onClose={() => setShowStatusModal(false)}
+          rideId={currentRideId}
         />
       )}
       

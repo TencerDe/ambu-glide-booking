@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 type MessageHandler = (message: any) => void;
@@ -12,15 +11,24 @@ class WebSocketService {
   private maxReconnectAttempts: number = 5;
   private reconnectTimeout: number = 3000; // Start with 3 seconds
   private url: string;
+  private userId: string | null = null;
 
-  constructor(url: string) {
-    this.url = url;
+  constructor(baseUrl: string) {
+    this.url = baseUrl;
   }
 
-  connect() {
+  connect(userId?: string) {
     if (this.socket?.readyState === WebSocket.OPEN) return;
+    
+    // If userId is provided, store it and use it in the URL
+    if (userId) {
+      this.userId = userId;
+      // Append userId to WebSocket URL if provided
+      this.url = this.url.replace(/\/+$/, '') + '/' + userId + '/';
+    }
 
     try {
+      console.log('Connecting to WebSocket at:', this.url);
       this.socket = new WebSocket(this.url);
 
       this.socket.onopen = () => {
@@ -31,8 +39,13 @@ class WebSocketService {
       };
 
       this.socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        this.messageHandlers.forEach(handler => handler(data));
+        console.log('WebSocket message received:', event.data);
+        try {
+          const data = JSON.parse(event.data);
+          this.messageHandlers.forEach(handler => handler(data));
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
       };
 
       this.socket.onerror = (error) => {
@@ -40,18 +53,21 @@ class WebSocketService {
         this.statusHandlers.forEach(handler => handler('error'));
       };
 
-      this.socket.onclose = () => {
-        console.log('WebSocket closed');
+      this.socket.onclose = (event) => {
+        console.log('WebSocket closed, code:', event.code, 'reason:', event.reason);
         this.statusHandlers.forEach(handler => handler('disconnected'));
         
         // Attempt to reconnect
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
+          console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
           setTimeout(() => {
             this.connect();
           }, this.reconnectTimeout);
           // Exponential backoff
           this.reconnectTimeout *= 2;
+        } else {
+          console.log('Max reconnect attempts reached.');
         }
       };
     } catch (error) {
@@ -61,6 +77,7 @@ class WebSocketService {
 
   disconnect() {
     if (this.socket) {
+      console.log('Disconnecting WebSocket');
       this.socket.close();
       this.socket = null;
     }
@@ -69,6 +86,7 @@ class WebSocketService {
   sendMessage(message: any) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
+      console.log('WebSocket message sent:', message);
     } else {
       console.error('WebSocket is not connected');
     }
@@ -91,14 +109,19 @@ class WebSocketService {
   }
 }
 
-// Create an instance for driver notifications
-export const driverNotificationsSocket = new WebSocketService('ws://localhost:8000/ws/driver/notifications/');
+// Create instances for user and driver notifications
+// For development, use the fallback WebSocket server if needed
+const WS_BASE_URL = 'ws://localhost:8000/ws';
 
-// Hook for using the WebSocket in components
+export const userRideSocket = new WebSocketService(`${WS_BASE_URL}/user/ride-status`);
+export const driverNotificationsSocket = new WebSocketService(`${WS_BASE_URL}/driver/notifications`);
+
+// Hook for using WebSocket in components
 export const useWebSocket = (
   wsInstance: WebSocketService,
   onMessage?: MessageHandler,
-  onStatus?: StatusHandler
+  onStatus?: StatusHandler,
+  userId?: string
 ) => {
   React.useEffect(() => {
     if (onMessage) {
@@ -109,7 +132,7 @@ export const useWebSocket = (
       wsInstance.addStatusHandler(onStatus);
     }
     
-    wsInstance.connect();
+    wsInstance.connect(userId);
     
     return () => {
       if (onMessage) {
@@ -119,12 +142,15 @@ export const useWebSocket = (
       if (onStatus) {
         wsInstance.removeStatusHandler(onStatus);
       }
+      
+      // We don't disconnect here to keep the WebSocket alive
+      // between component mounts
     };
-  }, [wsInstance, onMessage, onStatus]);
+  }, [wsInstance, onMessage, onStatus, userId]);
 
   return {
     sendMessage: (message: any) => wsInstance.sendMessage(message),
-    connect: () => wsInstance.connect(),
+    connect: (userId?: string) => wsInstance.connect(userId),
     disconnect: () => wsInstance.disconnect()
   };
 };

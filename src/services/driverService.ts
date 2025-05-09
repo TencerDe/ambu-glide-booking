@@ -2,7 +2,7 @@
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getItems, updateItem } from './supabaseUtils';
+import { getItems } from './supabaseUtils';
 
 // Use local storage as a fallback when Supabase is not available
 const getLocalDrivers = () => {
@@ -84,9 +84,38 @@ export const driverService = {
 
   getRideRequests: async () => {
     try {
-      // Use utility function to fetch ride requests
-      const data = await getItems('ride_requests', { status: 'eq.pending' });
-      return { data };
+      // Check if driver is already busy with a ride
+      const driverId = localStorage.getItem('driverId');
+      if (driverId) {
+        // First check if the driver has any ongoing rides
+        const { data: ongoingRides, error: ongoingError } = await supabase
+          .from('ride_requests')
+          .select('*')
+          .eq('driver_id', driverId)
+          .in('status', ['accepted', 'en_route'])
+          .order('created_at', { ascending: false });
+          
+        if (ongoingRides && ongoingRides.length > 0) {
+          // If driver has ongoing rides, don't show new requests
+          console.log('Driver has ongoing rides:', ongoingRides);
+          return { data: [] };
+        }
+      }
+      
+      // Get pending ride requests that don't have a driver assigned
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .is('driver_id', null)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching ride requests:', error);
+        throw error;
+      }
+      
+      return { data: data || [] };
     } catch (error) {
       console.error('Error in getRideRequests:', error);
       // Fallback to mock data for demo purposes
@@ -103,15 +132,52 @@ export const driverService = {
         throw new Error('Driver not authenticated');
       }
       
-      // Update the ride request in Supabase directly (not using updateItem utility)
+      // First check if the driver is already busy with another ride
+      const { data: driverData, error: driverError } = await supabase
+        .from('drivers')
+        .select('is_available')
+        .eq('id', driverId)
+        .single();
+        
+      if (driverError) {
+        console.error('Error checking driver status:', driverError);
+        throw new Error('Failed to check driver status');
+      }
+      
+      if (driverData && !driverData.is_available) {
+        throw new Error('You already have an active ride. Complete it before accepting new rides.');
+      }
+      
+      // Check if the ride is still available (pending and no driver assigned)
+      const { data: rideCheck, error: rideCheckError } = await supabase
+        .from('ride_requests')
+        .select('status, driver_id')
+        .eq('id', rideId)
+        .single();
+        
+      if (rideCheckError) {
+        console.error('Error checking ride status:', rideCheckError);
+        throw new Error('Failed to check ride status');
+      }
+      
+      if (!rideCheck || rideCheck.status !== 'pending' || rideCheck.driver_id) {
+        throw new Error('This ride is no longer available');
+      }
+      
+      // Update the ride request in Supabase directly
       const { data: rideData, error: rideError } = await supabase
         .from('ride_requests')
         .update({ 
           status: 'accepted',
-          driver_id: driverId 
+          driver_id: driverId,
+          updated_at: new Date().toISOString()
         })
         .eq('id', rideId)
-        .select();
+        .select(`
+          *,
+          driver:driver_id(*)
+        `)
+        .single();
         
       if (rideError) {
         console.error('Error updating ride status:', rideError);
@@ -121,20 +187,32 @@ export const driverService = {
       console.log('Ride accepted successfully:', rideData);
         
       // Also update driver status to 'busy'
-      const { data: driverData, error: driverError } = await supabase
+      const { data: updatedDriver, error: driverUpdateError } = await supabase
         .from('drivers')
         .update({ is_available: false })
         .eq('id', driverId)
         .select();
         
-      if (driverError) {
-        console.error('Error updating driver status:', driverError);
+      if (driverUpdateError) {
+        console.error('Error updating driver status:', driverUpdateError);
         // Don't throw here, as the ride was already accepted
       } else {
-        console.log('Driver status updated to busy:', driverData);
+        console.log('Driver status updated to busy:', updatedDriver);
+        
+        // Update local storage with new driver status
+        const currentDriverData = localStorage.getItem('driverData');
+        if (currentDriverData) {
+          try {
+            const driverObj = JSON.parse(currentDriverData);
+            driverObj.is_available = false;
+            localStorage.setItem('driverData', JSON.stringify(driverObj));
+          } catch (e) {
+            console.error('Error updating driver data in localStorage:', e);
+          }
+        }
       }
       
-      return { data: { message: 'Ride accepted successfully', ride: rideData?.[0] } };
+      return { data: { message: 'Ride accepted successfully', ride: rideData } };
     } catch (error: any) {
       console.error('Error in acceptRide:', error);
       throw error;
@@ -166,6 +244,104 @@ export const driverService = {
       // Fallback to localStorage
       const driverData = localStorage.getItem('driverData');
       return { data: driverData ? JSON.parse(driverData) : null };
+    }
+  },
+
+  getCurrentRide: async () => {
+    try {
+      const driverId = localStorage.getItem('driverId');
+      
+      if (!driverId) {
+        throw new Error('Driver not authenticated');
+      }
+      
+      // Get the driver's current active ride
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('driver_id', driverId)
+        .in('status', ['accepted', 'en_route'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows returned" which is not an error
+        console.error('Error fetching current ride:', error);
+        throw error;
+      }
+      
+      return { data };
+    } catch (error: any) {
+      console.error('Error in getCurrentRide:', error);
+      if (error.code === 'PGRST116') {
+        return { data: null }; // No current ride
+      }
+      throw new Error(error.message || 'Failed to get current ride');
+    }
+  },
+
+  updateRideStatus: async (rideId: string, status: string, location?: { lat: number, lng: number }) => {
+    try {
+      const driverId = localStorage.getItem('driverId');
+      
+      if (!driverId) {
+        throw new Error('Driver not authenticated');
+      }
+      
+      // Prepare update data
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add location if provided
+      if (location) {
+        updateData.driver_latitude = location.lat;
+        updateData.driver_longitude = location.lng;
+      }
+      
+      // Update the ride status
+      const { data, error } = await supabase
+        .from('ride_requests')
+        .update(updateData)
+        .eq('id', rideId)
+        .eq('driver_id', driverId) // Ensure this driver owns the ride
+        .select();
+        
+      if (error) {
+        console.error('Error updating ride status:', error);
+        throw error;
+      }
+      
+      // If the ride is completed, update driver availability
+      if (status === 'completed') {
+        const { error: driverError } = await supabase
+          .from('drivers')
+          .update({ is_available: true })
+          .eq('id', driverId);
+          
+        if (driverError) {
+          console.error('Error updating driver status:', driverError);
+          // Don't throw here as the ride status was already updated
+        } else {
+          // Update local storage
+          const driverDataStr = localStorage.getItem('driverData');
+          if (driverDataStr) {
+            try {
+              const driverData = JSON.parse(driverDataStr);
+              driverData.is_available = true;
+              localStorage.setItem('driverData', JSON.stringify(driverData));
+            } catch (e) {
+              console.error('Error updating driver data in localStorage:', e);
+            }
+          }
+        }
+      }
+      
+      return { data };
+    } catch (error: any) {
+      console.error('Error in updateRideStatus:', error);
+      throw error;
     }
   },
 

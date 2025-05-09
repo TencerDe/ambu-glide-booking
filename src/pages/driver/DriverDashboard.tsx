@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -6,9 +5,10 @@ import { driverService } from '@/services/driverService';
 import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building } from 'lucide-react';
+import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building, Check, X, Navigation } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { driverNotificationsSocket, useWebSocket } from '@/services/websocketService';
 
 interface RideRequest {
   id: string;
@@ -31,6 +31,7 @@ const DriverDashboard = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [acceptingRide, setAcceptingRide] = useState<string | null>(null);
   const [driverProfile, setDriverProfile] = useState<any>(null);
+  const [currentRide, setCurrentRide] = useState<any>(null);
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -44,9 +45,17 @@ const DriverDashboard = () => {
         const profileResponse = await driverService.getDriverProfile();
         setDriverProfile(profileResponse.data);
         
-        // Get ride requests
-        const rideResponse = await driverService.getRideRequests();
-        setRideRequests(rideResponse.data);
+        // Check for current active ride
+        const currentRideResponse = await driverService.getCurrentRide();
+        if (currentRideResponse.data) {
+          setCurrentRide(currentRideResponse.data);
+        }
+        
+        // Only get ride requests if driver doesn't have an active ride
+        if (!currentRideResponse.data) {
+          const rideResponse = await driverService.getRideRequests();
+          setRideRequests(rideResponse.data);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         toast.error('Failed to load dashboard data');
@@ -58,8 +67,35 @@ const DriverDashboard = () => {
     fetchData();
   }, []);
 
+  // Handle WebSocket messages for driver notifications
+  const handleDriverMessage = (data: any) => {
+    console.log('Driver notification received:', data);
+    
+    if (data.type === 'new_ride_request' && data.ride && !currentRide) {
+      // Add the new ride request to the top of the list
+      setRideRequests(current => [data.ride, ...current]);
+      
+      // Show notification
+      toast.info('New ride request received!', {
+        description: `From: ${data.ride.address}`
+      });
+    }
+  };
+  
+  // Use WebSocket hook for driver notifications
+  const driverId = localStorage.getItem('driverId');
+  const { sendMessage } = useWebSocket(
+    driverNotificationsSocket,
+    handleDriverMessage,
+    (status) => console.log('WebSocket status:', status),
+    driverId || undefined
+  );
+
   // Set up real-time subscription for ride requests
   useEffect(() => {
+    // Don't subscribe if driver has a current ride
+    if (currentRide) return;
+    
     // Subscribe to changes in the ride_requests table
     const channel = supabase
       .channel('ride-requests-changes')
@@ -74,13 +110,21 @@ const DriverDashboard = () => {
           console.log('New ride request received:', payload);
           const newRide = payload.new as RideRequest;
           
-          // Add the new ride request to the state
-          setRideRequests(current => [newRide, ...current]);
-          
-          // Show notification
-          toast.info('New ride request received!', {
-            description: `From: ${newRide.address}`
-          });
+          // Only add to list if driver doesn't have a current ride
+          if (!currentRide) {
+            // Add the new ride request to the state
+            setRideRequests(current => {
+              // Check if this ride is already in the list
+              const exists = current.some(ride => ride.id === newRide.id);
+              if (exists) return current;
+              return [newRide, ...current];
+            });
+            
+            // Show notification
+            toast.info('New ride request received!', {
+              description: `From: ${newRide.address}`
+            });
+          }
         }
       )
       .on('postgres_changes',
@@ -99,15 +143,20 @@ const DriverDashboard = () => {
               current.filter(ride => ride.id !== updatedRide.id)
             );
           }
+          
+          // If this is driver's current ride and it was updated
+          if (currentRide && currentRide.id === updatedRide.id) {
+            setCurrentRide(updatedRide);
+          }
         }
       )
       .subscribe();
     
-    // Cleanup subscription on component unmount
+    // Cleanup subscription on component unmount or when current ride changes
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentRide]);
 
   // Check if user is authenticated as driver
   useEffect(() => {
@@ -126,8 +175,9 @@ const DriverDashboard = () => {
       const response = await driverService.acceptRide(rideId);
       console.log('Accept ride response:', response);
       
-      // Update the local state - remove the accepted ride from the list
-      setRideRequests(prev => prev.filter(ride => ride.id !== rideId));
+      // Update the local state - remove all pending rides and set current ride
+      setRideRequests([]);
+      setCurrentRide(response.data.ride);
       
       // Update driver profile to reflect busy status
       if (driverProfile) {
@@ -138,11 +188,81 @@ const DriverDashboard = () => {
       }
       
       toast.success('Ride accepted successfully!');
+      
+      // Send a status update via WebSocket if needed
+      sendMessage({
+        type: 'status_update',
+        status: 'BUSY'
+      });
     } catch (error: any) {
       console.error('Error accepting ride:', error);
       toast.error(error.message || 'Failed to accept ride');
     } finally {
       setAcceptingRide(null); // Reset accepting state
+    }
+  };
+  
+  const handleUpdateRideStatus = async (status: string) => {
+    if (!currentRide) return;
+    
+    try {
+      // Get current position for location updates
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const location = { lat: latitude, lng: longitude };
+            
+            const response = await driverService.updateRideStatus(currentRide.id, status, location);
+            
+            if (status === 'en_route') {
+              toast.success('Status updated: On the way to pickup');
+            } else if (status === 'picked_up') {
+              toast.success('Status updated: Patient picked up');
+            } else if (status === 'completed') {
+              toast.success('Ride completed successfully!');
+              // Clear current ride and fetch new requests
+              setCurrentRide(null);
+              const rideResponse = await driverService.getRideRequests();
+              setRideRequests(rideResponse.data);
+            }
+            
+            // Update current ride state if not completed
+            if (status !== 'completed') {
+              setCurrentRide({
+                ...currentRide,
+                status,
+                driver_latitude: latitude,
+                driver_longitude: longitude
+              });
+            }
+          },
+          (error) => {
+            console.error('Error getting location:', error);
+            toast.error('Failed to get your current location');
+          }
+        );
+      } else {
+        // If geolocation is not available, update without location
+        const response = await driverService.updateRideStatus(currentRide.id, status);
+        
+        if (status === 'completed') {
+          toast.success('Ride completed successfully!');
+          // Clear current ride and fetch new requests
+          setCurrentRide(null);
+          const rideResponse = await driverService.getRideRequests();
+          setRideRequests(rideResponse.data);
+        } else {
+          // Update current ride state
+          setCurrentRide({
+            ...currentRide,
+            status
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Error updating ride status:', error);
+      toast.error(error.message || 'Failed to update ride status');
     }
   };
 
@@ -206,97 +326,194 @@ const DriverDashboard = () => {
               </div>
             )}
             
-            <div className="mb-8">
-              <h2 className="flex items-center text-xl font-semibold mb-4">
-                <Bell className="mr-2 h-5 w-5" />
-                New Ride Requests
-              </h2>
-              
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-                </div>
-              ) : rideRequests.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {rideRequests.map((request) => (
-                    <div 
-                      key={request.id} 
-                      className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="font-medium text-lg flex items-center">
-                          <User className="w-4 h-4 mr-2" />
-                          {request.name}
-                        </h3>
-                        <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          {request.status}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-2 text-sm text-gray-600 mb-4">
-                        <p className="flex items-start">
-                          <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-                          <span>{request.address}</span>
+            {/* Current Ride (if any) */}
+            {currentRide && (
+              <div className="mb-8">
+                <h2 className="flex items-center text-xl font-semibold mb-4">
+                  <Bell className="mr-2 h-5 w-5" />
+                  Current Ride
+                </h2>
+                
+                <div className="border rounded-lg p-5 shadow-sm bg-blue-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="font-medium text-lg flex items-center">
+                      <User className="w-4 h-4 mr-2" />
+                      {currentRide.name}
+                    </h3>
+                    <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      {currentRide.status}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm text-gray-600 mb-4">
+                    <p className="flex items-start">
+                      <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>{currentRide.address}</span>
+                    </p>
+                    {currentRide.hospital && (
+                      <p className="flex items-center">
+                        <Building className="w-4 h-4 mr-2" />
+                        <span>Hospital: {currentRide.hospital}</span>
+                      </p>
+                    )}
+                    <p className="flex items-center">
+                      <DollarSign className="w-4 h-4 mr-2" />
+                      <span className="font-medium">₹{currentRide.charge?.toLocaleString()}</span>
+                    </p>
+                    
+                    <div>
+                      <p className="text-sm mb-1">
+                        <span className="font-medium">Ambulance Type:</span> {currentRide.ambulance_type}
+                      </p>
+                      <p className="text-sm mb-1">
+                        <span className="font-medium">Patient Age:</span> {currentRide.age}
+                      </p>
+                      {currentRide.notes && (
+                        <p className="text-sm mt-2">
+                          <span className="font-medium">Notes:</span> {currentRide.notes}
                         </p>
-                        <p className="flex items-center">
-                          <Building className="w-4 h-4 mr-2" />
-                          <span>Hospital: {request.hospital}</span>
-                        </p>
-                        <p className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          <span>{new Date(request.created_at).toLocaleDateString()}</span>
-                        </p>
-                        <p className="flex items-center">
-                          <Clock className="w-4 h-4 mr-2" />
-                          <span>{new Date(request.created_at).toLocaleTimeString()}</span>
-                        </p>
-                        <p className="flex items-center">
-                          <DollarSign className="w-4 h-4 mr-2" />
-                          <span className="font-medium">₹{request.charge.toLocaleString()}</span>
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <p className="text-sm mb-1">
-                          <span className="font-medium">Ambulance Type:</span> {request.ambulance_type}
-                        </p>
-                        <p className="text-sm mb-1">
-                          <span className="font-medium">Vehicle Type:</span> {request.vehicle_type}
-                        </p>
-                        <p className="text-sm">
-                          <span className="font-medium">Age:</span> {request.age}
-                        </p>
-                        {request.notes && (
-                          <p className="text-sm mt-2">
-                            <span className="font-medium">Notes:</span> {request.notes}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <Button
-                        className="w-full mt-4 gradient-bg btn-animate"
-                        onClick={() => handleAcceptRide(request.id)}
-                        disabled={acceptingRide === request.id}
-                      >
-                        {acceptingRide === request.id ? (
-                          <span className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                            Processing...
-                          </span>
-                        ) : (
-                          `Accept Ride (₹${request.charge.toLocaleString()})`
-                        )}
-                      </Button>
+                      )}
                     </div>
-                  ))}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {currentRide.status === 'accepted' && (
+                      <Button
+                        onClick={() => handleUpdateRideStatus('en_route')}
+                        className="flex items-center gap-2 flex-grow"
+                      >
+                        <Navigation className="h-4 w-4" />
+                        Start Journey
+                      </Button>
+                    )}
+                    
+                    {currentRide.status === 'en_route' && (
+                      <Button
+                        onClick={() => handleUpdateRideStatus('picked_up')}
+                        className="flex items-center gap-2 flex-grow"
+                      >
+                        <Check className="h-4 w-4" />
+                        Patient Picked Up
+                      </Button>
+                    )}
+                    
+                    {currentRide.status === 'picked_up' && (
+                      <Button
+                        onClick={() => handleUpdateRideStatus('completed')}
+                        className="flex items-center gap-2 flex-grow"
+                      >
+                        <Check className="h-4 w-4" />
+                        Complete Ride
+                      </Button>
+                    )}
+                    
+                    {/* Call button for all statuses */}
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(`tel:${currentRide.phone || '911'}`)}
+                      className="flex items-center gap-2"
+                    >
+                      Call Patient
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-500">No new ride requests available at the moment.</p>
-                  <p className="text-gray-500 text-sm mt-2">New requests will appear here automatically.</p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
+            
+            {/* Ride Requests (only show if no current ride) */}
+            {!currentRide && (
+              <div className="mb-8">
+                <h2 className="flex items-center text-xl font-semibold mb-4">
+                  <Bell className="mr-2 h-5 w-5" />
+                  New Ride Requests
+                </h2>
+                
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                  </div>
+                ) : rideRequests.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {rideRequests.map((request) => (
+                      <div 
+                        key={request.id} 
+                        className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <h3 className="font-medium text-lg flex items-center">
+                            <User className="w-4 h-4 mr-2" />
+                            {request.name}
+                          </h3>
+                          <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                            {request.status}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2 text-sm text-gray-600 mb-4">
+                          <p className="flex items-start">
+                            <MapPin className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                            <span>{request.address}</span>
+                          </p>
+                          <p className="flex items-center">
+                            <Building className="w-4 h-4 mr-2" />
+                            <span>Hospital: {request.hospital}</span>
+                          </p>
+                          <p className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            <span>{new Date(request.created_at).toLocaleDateString()}</span>
+                          </p>
+                          <p className="flex items-center">
+                            <Clock className="w-4 h-4 mr-2" />
+                            <span>{new Date(request.created_at).toLocaleTimeString()}</span>
+                          </p>
+                          <p className="flex items-center">
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            <span className="font-medium">₹{request.charge.toLocaleString()}</span>
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-sm mb-1">
+                            <span className="font-medium">Ambulance Type:</span> {request.ambulance_type}
+                          </p>
+                          <p className="text-sm mb-1">
+                            <span className="font-medium">Vehicle Type:</span> {request.vehicle_type}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-medium">Age:</span> {request.age}
+                          </p>
+                          {request.notes && (
+                            <p className="text-sm mt-2">
+                              <span className="font-medium">Notes:</span> {request.notes}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <Button
+                          className="w-full mt-4 gradient-bg btn-animate"
+                          onClick={() => handleAcceptRide(request.id)}
+                          disabled={acceptingRide === request.id}
+                        >
+                          {acceptingRide === request.id ? (
+                            <span className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                              Processing...
+                            </span>
+                          ) : (
+                            `Accept Ride (₹${request.charge.toLocaleString()})`
+                          )}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <p className="text-gray-500">No new ride requests available at the moment.</p>
+                    <p className="text-gray-500 text-sm mt-2">New requests will appear here automatically.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </main>
