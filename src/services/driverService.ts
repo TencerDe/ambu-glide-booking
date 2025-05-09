@@ -96,33 +96,48 @@ export const driverService = {
 
   acceptRide: async (rideId: string) => {
     try {
+      console.log('Accepting ride with ID:', rideId);
       const driverId = localStorage.getItem('driverId');
       
       if (!driverId) {
         throw new Error('Driver not authenticated');
       }
       
-      // Update the ride request using our utility function
-      await updateItem('ride_requests', {
-        status: 'accepted',
-        driver_id: driverId
-      }, { id: `eq.${rideId}` });
+      // Update the ride request in Supabase directly (not using updateItem utility)
+      const { data: rideData, error: rideError } = await supabase
+        .from('ride_requests')
+        .update({ 
+          status: 'accepted',
+          driver_id: driverId 
+        })
+        .eq('id', rideId)
+        .select();
+        
+      if (rideError) {
+        console.error('Error updating ride status:', rideError);
+        throw new Error(rideError.message || 'Failed to accept ride');
+      }
       
+      console.log('Ride accepted successfully:', rideData);
+        
       // Also update driver status to 'busy'
-      const { error: driverError } = await supabase
+      const { data: driverData, error: driverError } = await supabase
         .from('drivers')
         .update({ is_available: false })
-        .eq('id', driverId);
+        .eq('id', driverId)
+        .select();
         
       if (driverError) {
         console.error('Error updating driver status:', driverError);
+        // Don't throw here, as the ride was already accepted
+      } else {
+        console.log('Driver status updated to busy:', driverData);
       }
       
-      return { data: { message: 'Ride accepted successfully' } };
-    } catch (error) {
+      return { data: { message: 'Ride accepted successfully', ride: rideData?.[0] } };
+    } catch (error: any) {
       console.error('Error in acceptRide:', error);
-      // Fallback to API for demo purposes
-      return api.post('/api/driver/accept-ride/', { rideId });
+      throw error;
     }
   },
 

@@ -1,4 +1,3 @@
-
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { insertItems } from './supabaseUtils';
@@ -63,8 +62,8 @@ export const userService = {
         if (locationData) {
           try {
             const location = JSON.parse(locationData);
-            latitude = location.lat || 0;
-            longitude = location.lng || 0;
+            latitude = location.lat || location.latitude || 0;
+            longitude = location.lng || location.longitude || 0;
             console.log(`Found location data in ${key}:`, location);
             break; // Exit loop once valid location is found
           } catch (error) {
@@ -93,19 +92,11 @@ export const userService = {
       
       console.log('Sending ride data to Supabase:', rideData);
       
-      // Use the Supabase client directly with better error handling
-      const { data, error } = await supabase
-        .from('ride_requests')
-        .insert(rideData)
-        .select();
+      // Use insertItems to bypass type checking for ride_requests table
+      const responseData = await insertItems('ride_requests', rideData);
       
-      if (error) {
-        console.error('Error in bookRide Supabase insertion:', error);
-        throw new Error(error.message || 'Failed to book ambulance');
-      }
-      
-      console.log('Booking successful, response:', data);
-      return { data };
+      console.log('Booking successful, response:', responseData);
+      return { data: responseData };
       
     } catch (error: any) {
       console.error('Error in bookRide:', error);

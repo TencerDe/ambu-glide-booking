@@ -29,6 +29,7 @@ interface RideRequest {
 const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [acceptingRide, setAcceptingRide] = useState<string | null>(null);
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -120,15 +121,28 @@ const DriverDashboard = () => {
 
   const handleAcceptRide = async (rideId: string) => {
     try {
-      await driverService.acceptRide(rideId);
+      setAcceptingRide(rideId); // Set the ID of the ride being accepted
       
-      // Update the local state
+      const response = await driverService.acceptRide(rideId);
+      console.log('Accept ride response:', response);
+      
+      // Update the local state - remove the accepted ride from the list
       setRideRequests(prev => prev.filter(ride => ride.id !== rideId));
       
+      // Update driver profile to reflect busy status
+      if (driverProfile) {
+        setDriverProfile({
+          ...driverProfile,
+          is_available: false
+        });
+      }
+      
       toast.success('Ride accepted successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting ride:', error);
-      toast.error('Failed to accept ride');
+      toast.error(error.message || 'Failed to accept ride');
+    } finally {
+      setAcceptingRide(null); // Reset accepting state
     }
   };
 
@@ -262,8 +276,16 @@ const DriverDashboard = () => {
                       <Button
                         className="w-full mt-4 gradient-bg btn-animate"
                         onClick={() => handleAcceptRide(request.id)}
+                        disabled={acceptingRide === request.id}
                       >
-                        Accept Ride (₹{request.charge.toLocaleString()})
+                        {acceptingRide === request.id ? (
+                          <span className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </span>
+                        ) : (
+                          `Accept Ride (₹${request.charge.toLocaleString()})`
+                        )}
                       </Button>
                     </div>
                   ))}
