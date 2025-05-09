@@ -31,6 +31,11 @@ export const directRequest = async (
   };
   
   try {
+    console.log(`🔄 API Request: ${options.method || 'GET'} ${url.toString()}`);
+    if (options.body) {
+      console.log('📦 Request Body:', options.body);
+    }
+    
     const response = await fetch(url.toString(), {
       ...options,
       headers
@@ -38,7 +43,7 @@ export const directRequest = async (
     
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('API request failed:', response.status, errorData);
+      console.error('❌ API request failed:', response.status, errorData);
       throw new Error(`API request failed: ${response.status} ${errorData}`);
     }
     
@@ -48,9 +53,10 @@ export const directRequest = async (
     }
     
     const data = await response.json();
+    console.log('✅ API Response:', data);
     return data;
   } catch (error) {
-    console.error('Error in directRequest:', error);
+    console.error('❌ Error in directRequest:', error);
     throw error;
   }
 };

@@ -1,12 +1,13 @@
 
 import { toast } from 'sonner';
-
-const SUPABASE_URL = "https://lavfpsnvwyzpilmgkytj.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo";
+import { updateItem } from './supabaseUtils';
 
 type DriverStatus = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 
-// Simple robust function to update driver status
+/**
+ * Update driver status in the database
+ * This implementation focuses on stability and proper persistence of the status
+ */
 export const updateDriverStatus = async (
   newStatus: DriverStatus
 ): Promise<{ success: boolean; data?: any; error?: string }> => {
@@ -27,109 +28,86 @@ export const updateDriverStatus = async (
     if (newStatus === 'AVAILABLE') {
       console.log('🔍 Checking for active rides before setting status to AVAILABLE');
       
-      // Send a fetch with the right headers to match our data model
-      const activeRidesResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/ride_requests?driver_id=eq.${driverId}&or=(status.eq.accepted,status.eq.en_route,status.eq.picked_up)`,
-        {
-          method: 'GET',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
+      try {
+        const activeRides = await updateItem(
+          'ride_requests',
+          {},
+          { 
+            'driver_id': `eq.${driverId}`,
+            'or': '(status.eq.accepted,status.eq.en_route,status.eq.picked_up)',
+            'select': 'id'
           }
+        );
+        
+        console.log('📊 Active rides check result:', activeRides);
+        
+        if (activeRides && activeRides.length > 0) {
+          console.warn('⚠️ Driver has active rides, cannot set status to AVAILABLE');
+          return { 
+            success: false, 
+            error: 'Cannot set status to Available while you have active rides' 
+          };
         }
-      );
-      
-      // Handle fetch errors
-      if (!activeRidesResponse.ok) {
-        const errorText = await activeRidesResponse.text();
-        console.error('❌ Error checking active rides:', activeRidesResponse.status, errorText);
-        return { 
-          success: false, 
-          error: 'Failed to check for active rides' 
-        };
-      }
-      
-      // Process the response
-      const activeRides = await activeRidesResponse.json();
-      console.log('📊 Active rides check result:', activeRides);
-      
-      if (activeRides && activeRides.length > 0) {
-        console.warn('⚠️ Driver has active rides, cannot set status to AVAILABLE');
-        return { 
-          success: false, 
-          error: 'Cannot set status to Available while you have active rides' 
-        };
+      } catch (error) {
+        console.error('❌ Error checking active rides:', error);
+        // Continue with update anyway, but log the error
       }
     }
     
-    // Step 3: Update the driver status
-    console.log(`📝 Updating driver ${driverId} status`);
+    // Step 3: Update the driver status using updateItem utility
+    console.log(`📝 Updating driver ${driverId} is_available status to:`, newStatus === 'AVAILABLE');
     
-    // IMPORTANT: The table doesn't have a 'status' column according to the error
-    // Only update the is_available field which does exist in the schema
-    const updateResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          is_available: newStatus === 'AVAILABLE'
-        })
-      }
+    const updatedDrivers = await updateItem(
+      'drivers',
+      { is_available: newStatus === 'AVAILABLE' },
+      { 'id': `eq.${driverId}` }
     );
     
-    // Handle update errors
-    if (!updateResponse.ok) {
-      const errorText = await updateResponse.text();
-      console.error('❌ Driver status update failed:', updateResponse.status, errorText);
-      return { 
-        success: false, 
-        error: `Failed to update status: ${updateResponse.statusText}` 
+    if (!updatedDrivers || updatedDrivers.length === 0) {
+      console.error('❌ No driver was updated');
+      return {
+        success: false,
+        error: 'No driver was updated'
       };
     }
     
-    // Parse the response data
-    const responseData = await updateResponse.json();
-    console.log('✅ Driver status update response:', responseData);
+    // Step 4: Handle the response data
+    const updatedDriver = updatedDrivers[0];
+    console.log('✅ Driver status update response:', updatedDriver);
     
-    // Update localStorage with new status
-    if (responseData && responseData.length > 0) {
-      const updatedDriver = responseData[0];
-      console.log('💾 Updating localStorage with driver data:', updatedDriver);
-      
-      // Get existing driver data to merge with new data
-      const existingDataStr = localStorage.getItem('driverData');
-      const existingData = existingDataStr ? JSON.parse(existingDataStr) : {};
-      
-      // Map the is_available to an equivalent status for our UI
-      const derivedStatus = updatedDriver.is_available ? 'AVAILABLE' : 'OFFLINE';
-      
-      // Update only the status-related fields
-      const updatedDriverData = {
-        ...existingData,
-        status: derivedStatus, // Derive status from is_available for local use
-        is_available: updatedDriver.is_available
-      };
-      
-      localStorage.setItem('driverData', JSON.stringify(updatedDriverData));
-      return { success: true, data: updatedDriverData };
-    } else {
-      console.error('⚠️ No driver data received from update response');
-      return { 
-        success: false, 
-        error: 'No driver data received from update' 
-      };
+    // Step 5: Update localStorage with the new status to ensure persistence
+    const existingDataStr = localStorage.getItem('driverData');
+    let existingData = {};
+    try {
+      existingData = existingDataStr ? JSON.parse(existingDataStr) : {};
+    } catch (e) {
+      console.error('❌ Error parsing existing driver data:', e);
+      // Continue with empty object if parsing fails
     }
+    
+    // Map the is_available to the appropriate status for the UI
+    const derivedStatus = updatedDriver.is_available ? 'AVAILABLE' : 'OFFLINE';
+    
+    // Create a complete driver data object
+    const updatedDriverData = {
+      ...existingData,
+      status: derivedStatus, 
+      is_available: updatedDriver.is_available,
+      // Ensure the ID is always included
+      id: driverId
+    };
+    
+    // Store the updated data in localStorage
+    localStorage.setItem('driverData', JSON.stringify(updatedDriverData));
+    console.log('💾 Updated localStorage with driver data:', updatedDriverData);
+    
+    // Return success with the updated data
+    return { 
+      success: true, 
+      data: updatedDriverData 
+    };
+    
   } catch (error: any) {
-    // Catch any unexpected errors
     console.error('❌ Unexpected error updating driver status:', error);
     return { 
       success: false, 
@@ -138,7 +116,10 @@ export const updateDriverStatus = async (
   }
 };
 
-// Helper function to handle status updates with UI feedback
+/**
+ * Helper function to handle status updates with UI feedback
+ * This implementation ensures consistent UI updates
+ */
 export const toggleDriverStatus = async (
   currentStatus: string,
   onStatusChanged: (newData: any) => void
@@ -146,17 +127,25 @@ export const toggleDriverStatus = async (
   try {
     // Determine the new status based on the current one
     const newStatus = currentStatus === 'AVAILABLE' ? 'OFFLINE' : 'AVAILABLE';
-    toast.loading(`Setting status to ${newStatus.toLowerCase()}...`);
+    
+    // Show toast notification for status update
+    const toastId = toast.loading(`Setting status to ${newStatus.toLowerCase()}...`);
     
     // Call the update function
     const result = await updateDriverStatus(newStatus as DriverStatus);
-    toast.dismiss();
+    
+    // Dismiss loading toast
+    toast.dismiss(toastId);
     
     if (result.success && result.data) {
+      // Successful status change notification
       toast.success(`Status changed to ${newStatus.toLowerCase()}`);
+      
+      // Update the UI
       onStatusChanged(result.data);
       return true;
     } else {
+      // Error notification
       toast.error(result.error || 'Failed to update status');
       return false;
     }
