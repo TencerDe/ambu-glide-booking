@@ -1,4 +1,3 @@
-
 import api from './api';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -148,14 +147,22 @@ export const driverService = {
         throw new Error('You already have an active ride. Complete it before accepting new rides.');
       }
       
-      // Check if the ride is still available (pending and no driver assigned)
+      // Add a small delay to prevent race conditions with other drivers
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Use a database transaction to safely check and update the ride
+      // Since Supabase JS client doesn't support transactions directly, 
+      // we need to do this with careful error handling
+      
+      // Step 1: Check if the ride is still available with a SELECT FOR UPDATE equivalent
+      // (Supabase doesn't support FOR UPDATE, so we do a careful check)
       const { data: rideCheck, error: rideCheckError } = await supabase
         .from('ride_requests')
-        .select('*')  // Select all fields to get complete ride data
+        .select('*')
         .eq('id', rideId)
-        .eq('status', 'pending')  // Only get rides with pending status
-        .is('driver_id', null)    // Only get rides with no driver assigned
-        .maybeSingle(); // Using maybeSingle instead of single to prevent errors
+        .eq('status', 'pending')
+        .is('driver_id', null)
+        .maybeSingle();
         
       if (rideCheckError) {
         console.error('Error checking ride status:', rideCheckError);
@@ -164,12 +171,12 @@ export const driverService = {
       
       if (!rideCheck) {
         console.error('Ride not available:', rideId);
-        throw new Error('This ride is no longer available');
+        throw new Error('This ride is no longer available. Another driver may have accepted it.');
       }
       
       console.log('Ride check succeeded, ride is available:', rideCheck);
       
-      // Update the ride request in Supabase directly
+      // Step 2: Try to update the ride with driver info
       const { data: rideData, error: rideError } = await supabase
         .from('ride_requests')
         .update({ 
@@ -178,8 +185,10 @@ export const driverService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', rideId)
+        .eq('status', 'pending')  // Ensure it's still pending
+        .is('driver_id', null)    // Ensure no driver has taken it
         .select()
-        .maybeSingle(); // Using maybeSingle instead of single
+        .maybeSingle();
         
       if (rideError) {
         console.error('Error updating ride status:', rideError);
@@ -187,18 +196,18 @@ export const driverService = {
       }
       
       if (!rideData) {
-        throw new Error('Failed to accept ride. The ride may no longer be available.');
+        throw new Error('Failed to accept ride. The ride may have been accepted by another driver.');
       }
       
       console.log('Ride accepted successfully:', rideData);
         
-      // Also update driver status to 'busy'
+      // Step 3: Update driver status to 'busy'
       const { data: updatedDriver, error: driverUpdateError } = await supabase
         .from('drivers')
         .update({ is_available: false })
         .eq('id', driverId)
         .select()
-        .maybeSingle(); // Using maybeSingle instead of single
+        .maybeSingle();
         
       if (driverUpdateError) {
         console.error('Error updating driver status:', driverUpdateError);

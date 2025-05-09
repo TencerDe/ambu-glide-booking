@@ -33,6 +33,65 @@ const RideStatusModal: React.FC<RideStatusModalProps> = ({
     }
   };
   
+  // Check ride status from database on component mount and periodically
+  useEffect(() => {
+    const checkRideStatus = async () => {
+      try {
+        const { data, error } = await fetch(
+          `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/ride_requests?id=eq.${rideId}&select=*`,
+          {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo'
+            }
+          }
+        ).then(res => res.json());
+        
+        if (error) {
+          console.error('Error checking ride status:', error);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          const rideData = data[0];
+          if (rideData.status !== status) {
+            setStatus(rideData.status);
+            
+            if (rideData.status === 'accepted' && rideData.driver_id) {
+              // Get driver info
+              const { data: driverData, error: driverError } = await fetch(
+                `https://lavfpsnvwyzpilmgkytj.supabase.co/rest/v1/drivers?id=eq.${rideData.driver_id}&select=*`,
+                {
+                  headers: {
+                    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo',
+                    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo'
+                  }
+                }
+              ).then(res => res.json());
+              
+              if (driverError) {
+                console.error('Error fetching driver info:', driverError);
+              } else if (driverData && driverData.length > 0) {
+                setDriverInfo(driverData[0]);
+                toast.success('A driver has accepted your ride!');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error in checkRideStatus:', error);
+      }
+    };
+    
+    // Check status immediately
+    checkRideStatus();
+    
+    // Set up polling for status updates every 5 seconds as a fallback for WebSocket
+    const interval = setInterval(checkRideStatus, 5000);
+    
+    return () => clearInterval(interval);
+  }, [rideId, status]);
+  
   // Use WebSocket hook
   const { sendMessage } = useWebSocket(
     userRideSocket,
