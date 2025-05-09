@@ -65,7 +65,10 @@ export const updateDriverStatus = async (
     }
     
     // Step 3: Update the driver status
-    console.log(`📝 Updating driver ${driverId} status to ${newStatus}`);
+    console.log(`📝 Updating driver ${driverId} status`);
+    
+    // IMPORTANT: The table doesn't have a 'status' column according to the error
+    // Only update the is_available field which does exist in the schema
     const updateResponse = await fetch(
       `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
       {
@@ -78,7 +81,6 @@ export const updateDriverStatus = async (
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          status: newStatus,
           is_available: newStatus === 'AVAILABLE'
         })
       }
@@ -107,10 +109,13 @@ export const updateDriverStatus = async (
       const existingDataStr = localStorage.getItem('driverData');
       const existingData = existingDataStr ? JSON.parse(existingDataStr) : {};
       
+      // Map the is_available to an equivalent status for our UI
+      const derivedStatus = updatedDriver.is_available ? 'AVAILABLE' : 'OFFLINE';
+      
       // Update only the status-related fields
       const updatedDriverData = {
         ...existingData,
-        status: updatedDriver.status,
+        status: derivedStatus, // Derive status from is_available for local use
         is_available: updatedDriver.is_available
       };
       

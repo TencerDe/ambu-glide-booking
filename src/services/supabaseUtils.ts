@@ -1,5 +1,7 @@
 
 // Utility functions for direct Supabase API requests
+import { supabase } from "@/integrations/supabase/client";
+
 const SUPABASE_URL = "https://lavfpsnvwyzpilmgkytj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhdmZwc252d3l6cGlsbWdreXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjYyNTYsImV4cCI6MjA2MjEwMjI1Nn0.fQ1m_bE_jBAp-1VGrDv3O-j0yK3z1uq-8N1E1SsOjwo";
 
@@ -28,24 +30,29 @@ export const directRequest = async (
     ...options.headers
   };
   
-  const response = await fetch(url.toString(), {
-    ...options,
-    headers
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('API request failed:', errorData);
-    throw new Error(`API request failed: ${response.statusText}`);
+  try {
+    const response = await fetch(url.toString(), {
+      ...options,
+      headers
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('API request failed:', response.status, errorData);
+      throw new Error(`API request failed: ${response.status} ${errorData}`);
+    }
+    
+    // For HEAD requests, don't try to parse the body
+    if (options.method === 'HEAD') {
+      return { status: response.status, headers: response.headers };
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error in directRequest:', error);
+    throw error;
   }
-  
-  // For HEAD requests, don't try to parse the body
-  if (options.method === 'HEAD') {
-    return { status: response.status, headers: response.headers };
-  }
-  
-  const data = await response.json();
-  return data;
 };
 
 /**
