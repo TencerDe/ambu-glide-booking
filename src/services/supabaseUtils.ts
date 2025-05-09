@@ -18,17 +18,29 @@ export const directRequest = async (
 ) => {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${endpoint}`);
   
+  // Separate Prefer header from query parameters
+  let preferHeader = '';
+  if (queryParams['prefer']) {
+    preferHeader = queryParams['prefer'];
+    delete queryParams['prefer'];
+  }
+  
   // Add query parameters if any
   Object.entries(queryParams).forEach(([key, value]) => {
     url.searchParams.append(key, value);
   });
   
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
-    ...options.headers
+    ...(options.headers || {})
   };
+  
+  // Add Prefer header if it exists
+  if (preferHeader) {
+    headers['Prefer'] = preferHeader;
+  }
   
   try {
     console.log(`🔄 API Request: ${options.method || 'GET'} ${url.toString()}`);
@@ -42,9 +54,15 @@ export const directRequest = async (
     });
     
     if (!response.ok) {
-      const errorData = await response.text();
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = errorText;
+      }
       console.error('❌ API request failed:', response.status, errorData);
-      throw new Error(`API request failed: ${response.status} ${errorData}`);
+      throw new Error(`API request failed: ${response.status} ${errorText}`);
     }
     
     // For HEAD requests, don't try to parse the body

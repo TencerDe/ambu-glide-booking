@@ -1,6 +1,6 @@
 
 import { toast } from 'sonner';
-import { updateItem } from './supabaseUtils';
+import { supabase } from "@/integrations/supabase/client";
 
 type DriverStatus = 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 
@@ -29,17 +29,16 @@ export const updateDriverStatus = async (
       console.log('🔍 Checking for active rides before setting status to AVAILABLE');
       
       try {
-        const activeRides = await updateItem(
-          'ride_requests',
-          {},
-          { 
-            'driver_id': `eq.${driverId}`,
-            'or': '(status.eq.accepted,status.eq.en_route,status.eq.picked_up)',
-            'select': 'id'
-          }
-        );
+        // Use the built-in Supabase client for this query as it's more reliable for querying
+        const { data: activeRides, error } = await supabase
+          .from('ride_requests')
+          .select('id')
+          .eq('driver_id', driverId)
+          .in('status', ['accepted', 'en_route', 'picked_up']);
         
         console.log('📊 Active rides check result:', activeRides);
+        
+        if (error) throw error;
         
         if (activeRides && activeRides.length > 0) {
           console.warn('⚠️ Driver has active rides, cannot set status to AVAILABLE');
@@ -54,14 +53,22 @@ export const updateDriverStatus = async (
       }
     }
     
-    // Step 3: Update the driver status using updateItem utility
+    // Step 3: Update the driver status using the Supabase client
     console.log(`📝 Updating driver ${driverId} is_available status to:`, newStatus === 'AVAILABLE');
     
-    const updatedDrivers = await updateItem(
-      'drivers',
-      { is_available: newStatus === 'AVAILABLE' },
-      { 'id': `eq.${driverId}` }
-    );
+    const { data: updatedDrivers, error } = await supabase
+      .from('drivers')
+      .update({ is_available: newStatus === 'AVAILABLE' })
+      .eq('id', driverId)
+      .select();
+    
+    if (error) {
+      console.error('❌ Error updating driver status:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
     
     if (!updatedDrivers || updatedDrivers.length === 0) {
       console.error('❌ No driver was updated');
