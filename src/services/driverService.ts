@@ -92,13 +92,29 @@ export const driverService = {
     }
   },
 
-  // Delegate ride acceptance to the new specialized service
+  // Use both service methods to guarantee success
   acceptRide: async (rideId: string) => {
-    const result = await rideAcceptanceService.acceptRide(rideId);
-    if (!result.success) {
-      throw new Error(result.message);
+    try {
+      console.log(`Beginning ride acceptance process for ride ${rideId}`);
+      
+      // First try with the Supabase client
+      const result = await rideAcceptanceService.acceptRide(rideId);
+      
+      if (!result.success) {
+        console.log('First attempt failed, trying direct API method');
+        // If that fails, try with the direct API method
+        const directResult = await rideAcceptanceService.directAcceptRide(rideId);
+        if (!directResult.success) {
+          throw new Error(directResult.message);
+        }
+        return { data: { message: directResult.message, ride: directResult.ride } };
+      }
+      
+      return { data: { message: result.message, ride: result.ride } };
+    } catch (error: any) {
+      console.error('All acceptance methods failed:', error);
+      throw new Error(error.message || 'Failed to accept ride after all attempts');
     }
-    return { data: { message: result.message, ride: result.ride } };
   },
 
   getDriverProfile: async () => {
