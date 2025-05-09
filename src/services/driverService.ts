@@ -12,27 +12,59 @@ export const driverService = {
   /**
    * Login for a driver
    */
-  login: async (email: string, password: string) => {
+  login: async (username: string, password: string) => {
     try {
-      const response = await axios.post(`${API_URL}/driver/login/`, { email, password });
+      // First try Supabase direct authentication
+      console.log('Attempting driver login with username:', username);
       
-      if (response.data && response.data.access) {
-        localStorage.setItem('token', response.data.access);
-        localStorage.setItem('refresh', response.data.refresh);
-        localStorage.setItem('role', 'driver');
-        
-        if (response.data.driver) {
-          localStorage.setItem('userId', response.data.driver.user.id);
-          localStorage.setItem('driverId', response.data.driver.id);
-        }
-        
-        return { success: true };
+      // Find the driver by username
+      const { data: drivers, error: driverError } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('username', username)
+        .limit(1);
+      
+      if (driverError) {
+        console.error('Error finding driver:', driverError);
+        return { success: false, error: 'Failed to authenticate' };
       }
       
-      return { success: false, error: 'Invalid response from server' };
+      if (!drivers || drivers.length === 0) {
+        console.log('No driver found with username:', username);
+        return { success: false, error: 'Invalid credentials' };
+      }
+      
+      const driver = drivers[0];
+      
+      // Verify password
+      const { data: credentials, error: credentialsError } = await supabase
+        .from('driver_credentials')
+        .select('*')
+        .eq('driver_id', driver.id)
+        .single();
+      
+      if (credentialsError) {
+        console.error('Error finding credentials:', credentialsError);
+        return { success: false, error: 'Authentication failed' };
+      }
+      
+      if (!credentials || credentials.password !== password) {
+        console.log('Invalid password for driver:', username);
+        return { success: false, error: 'Invalid credentials' };
+      }
+      
+      // Store driver info in local storage
+      localStorage.setItem('token', 'driver-session-token');
+      localStorage.setItem('role', 'driver');
+      localStorage.setItem('driverId', driver.id);
+      localStorage.setItem('driverData', JSON.stringify(driver));
+      
+      console.log('Driver login successful:', driver.name);
+      return { success: true };
+      
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || 'Login failed';
-      return { success: false, error: errorMessage };
+      console.error('Login error:', error);
+      return { success: false, error: error.message || 'Login failed' };
     }
   },
   
@@ -43,8 +75,8 @@ export const driverService = {
     localStorage.removeItem('token');
     localStorage.removeItem('refresh');
     localStorage.removeItem('role');
-    localStorage.removeItem('userId');
     localStorage.removeItem('driverId');
+    localStorage.removeItem('driverData');
   },
   
   /**
@@ -52,16 +84,26 @@ export const driverService = {
    */
   getDriverProfile: async () => {
     try {
-      const response = await axios.get(`${API_URL}/driver/profile/`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const driverId = localStorage.getItem('driverId');
       
-      return { success: true, data: response.data };
+      if (!driverId) {
+        return { success: false, error: 'Driver not authenticated' };
+      }
+      
+      const { data: driver, error } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('id', driverId)
+        .single();
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      return { success: true, data: driver };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || 'Failed to get profile';
-      return { success: false, error: errorMessage };
+      console.error('Error getting driver profile:', error);
+      return { success: false, error: error.message || 'Failed to get profile' };
     }
   },
   
@@ -82,20 +124,7 @@ export const driverService = {
       return { success: true, data: supabaseData || [] };
     } catch (error: any) {
       console.error('Error getting ride requests:', error);
-      
-      try {
-        // Fallback to API if Supabase fails
-        const response = await axios.get(`${API_URL}/rides/available/`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        return { success: true, data: response.data };
-      } catch (apiError: any) {
-        const errorMessage = apiError.response?.data?.error || 'Failed to get ride requests';
-        return { success: false, error: errorMessage, data: [] };
-      }
+      return { success: false, error: error.message || 'Failed to get ride requests', data: [] };
     }
   },
   
@@ -116,33 +145,14 @@ export const driverService = {
         .in('status', ['accepted', 'en_route', 'picked_up'])
         .order('updated_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
-      if (supabaseError && supabaseError.code !== 'PGRST116') { // Not found error is ok
+      if (supabaseError) {
         throw new Error(supabaseError.message);
       }
       
-      if (supabaseData) {
-        return { success: true, data: supabaseData };
-      }
-      
-      // If no active ride found in Supabase, try the API as backup
-      const response = await axios.get(`${API_URL}/driver/current-ride/`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      return { 
-        success: true, 
-        data: response.data && Object.keys(response.data).length > 0 ? response.data : null 
-      };
+      return { success: true, data: supabaseData };
     } catch (error: any) {
-      if (error.message === 'JSON object requested, multiple (or no) rows returned') {
-        // No current ride, which is a valid state
-        return { success: true, data: null };
-      }
-      
       console.error('Error getting current ride:', error);
       return { success: false, error: 'Failed to get current ride', data: null };
     }
@@ -153,80 +163,86 @@ export const driverService = {
    */
   acceptRide: async (rideId: string) => {
     try {
-      const response = await axios.post(
-        `${API_URL}/driver/accept-ride/`,
-        { ride_id: rideId },
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
+      const driverId = localStorage.getItem('driverId');
+        
+      if (!driverId) {
+        return { success: false, error: 'Driver not authenticated' };
+      }
       
-      return { success: true, data: response.data };
-    } catch (error: any) {
-      console.error('Error accepting ride:', error);
+      // First check if ride is still available
+      const { data: availableRide, error: checkError } = await supabase
+        .from('ride_requests')
+        .select('*')
+        .eq('id', rideId)
+        .eq('status', 'pending')
+        .is('driver_id', null)
+        .single();
       
-      // If API request failed, try direct Supabase update as fallback
-      try {
-        const driverId = localStorage.getItem('driverId');
-        
-        if (!driverId) {
-          return { success: false, error: 'Driver not authenticated' };
-        }
-        
-        // First check if ride is still available
-        const { data: availableRide, error: checkError } = await supabase
-          .from('ride_requests')
-          .select('*')
-          .eq('id', rideId)
-          .eq('status', 'pending')
-          .is('driver_id', null)
-          .single();
-        
-        if (checkError || !availableRide) {
-          return { 
-            success: false, 
-            error: 'This ride is no longer available', 
-            code: 'RIDE_UNAVAILABLE' 
-          };
-        }
-        
-        // Update the ride
-        const { data: updatedRide, error: updateError } = await supabase
-          .from('ride_requests')
-          .update({ 
-            driver_id: driverId, 
-            status: 'accepted',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', rideId)
-          .select();
-        
-        if (updateError) {
-          throw new Error(updateError.message);
-        }
-        
-        return { 
-          success: true, 
-          data: { 
-            ride: updatedRide ? updatedRide[0] : null,
-            message: 'Ride accepted successfully'
-          }
-        };
-      } catch (fallbackError: any) {
-        const errorMessage = error.response?.data?.error || 
-                             error.response?.data?.message ||
-                             'Failed to accept ride';
-        
-        const errorCode = error.response?.data?.code || 'ERROR';
-        
+      if (checkError || !availableRide) {
         return { 
           success: false, 
-          error: errorMessage,
-          code: errorCode
+          error: 'This ride is no longer available', 
+          code: 'RIDE_UNAVAILABLE' 
         };
       }
+      
+      // Update driver availability
+      const { error: driverError } = await supabase
+        .from('drivers')
+        .update({ is_available: false })
+        .eq('id', driverId);
+      
+      if (driverError) {
+        throw new Error(`Failed to update driver status: ${driverError.message}`);
+      }
+      
+      // Update the ride
+      const { data: updatedRide, error: updateError } = await supabase
+        .from('ride_requests')
+        .update({ 
+          driver_id: driverId, 
+          status: 'accepted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', rideId)
+        .select()
+        .single();
+      
+      if (updateError) {
+        // Rollback driver status
+        await supabase
+          .from('drivers')
+          .update({ is_available: true })
+          .eq('id', driverId);
+          
+        throw new Error(`Failed to update ride: ${updateError.message}`);
+      }
+      
+      // Update driver data in localStorage
+      const driverDataStr = localStorage.getItem('driverData');
+      if (driverDataStr) {
+        try {
+          const driverData = JSON.parse(driverDataStr);
+          driverData.is_available = false;
+          localStorage.setItem('driverData', JSON.stringify(driverData));
+        } catch (e) {
+          console.error('Error updating driver data in localStorage:', e);
+        }
+      }
+      
+      return { 
+        success: true, 
+        data: { 
+          ride: updatedRide,
+          message: 'Ride accepted successfully'
+        }
+      };
+    } catch (error: any) {
+      console.error('Error accepting ride:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to accept ride'
+      };
     }
   },
   
@@ -235,77 +251,63 @@ export const driverService = {
    */
   updateRideStatus: async (rideId: string, status: string, location?: { lat: number, lng: number }) => {
     try {
-      const payload: any = { status };
+      const driverId = localStorage.getItem('driverId');
+      
+      if (!driverId) {
+        return { success: false, error: 'Driver not authenticated' };
+      }
+      
+      const updateData: any = { 
+        status, 
+        updated_at: new Date().toISOString() 
+      };
       
       if (location) {
-        payload.driver_latitude = location.lat;
-        payload.driver_longitude = location.lng;
+        updateData.driver_latitude = location.lat;
+        updateData.driver_longitude = location.lng;
       }
       
-      const response = await axios.put(
-        `${API_URL}/rides/update-status/${rideId}/`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const { data: updatedRide, error: updateError } = await supabase
+        .from('ride_requests')
+        .update(updateData)
+        .eq('id', rideId)
+        .eq('driver_id', driverId)
+        .select();
+      
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+      
+      // If the ride is completed, update driver status accordingly
+      if (status === 'completed') {
+        await supabase
+          .from('drivers')
+          .update({ 
+            is_available: true,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', driverId);
+          
+        // Update driver data in localStorage
+        const driverDataStr = localStorage.getItem('driverData');
+        if (driverDataStr) {
+          try {
+            const driverData = JSON.parse(driverDataStr);
+            driverData.is_available = true;
+            localStorage.setItem('driverData', JSON.stringify(driverData));
+          } catch (e) {
+            console.error('Error updating driver data in localStorage:', e);
           }
         }
-      );
+      }
       
-      return { success: true, data: response.data };
+      return { 
+        success: true, 
+        data: updatedRide ? updatedRide[0] : null
+      };
     } catch (error: any) {
       console.error('Error updating ride status:', error);
-      
-      // Try Supabase update as fallback
-      try {
-        const driverId = localStorage.getItem('driverId');
-        
-        if (!driverId) {
-          return { success: false, error: 'Driver not authenticated' };
-        }
-        
-        const updateData: any = { 
-          status, 
-          updated_at: new Date().toISOString() 
-        };
-        
-        if (location) {
-          updateData.driver_latitude = location.lat;
-          updateData.driver_longitude = location.lng;
-        }
-        
-        const { data: updatedRide, error: updateError } = await supabase
-          .from('ride_requests')
-          .update(updateData)
-          .eq('id', rideId)
-          .eq('driver_id', driverId)
-          .select();
-        
-        if (updateError) {
-          throw new Error(updateError.message);
-        }
-        
-        // If the ride is completed, update driver status accordingly
-        if (status === 'completed') {
-          await supabase
-            .from('drivers')
-            .update({ 
-              updated_at: new Date().toISOString() 
-            })
-            .eq('id', driverId);
-        }
-        
-        return { 
-          success: true, 
-          data: updatedRide ? updatedRide[0] : null
-        };
-      } catch (fallbackError: any) {
-        const errorMessage = error.response?.data?.error || 
-                            error.response?.data?.message ||
-                            'Failed to update ride status';
-        
-        return { success: false, error: errorMessage };
-      }
+      return { success: false, error: error.message || 'Failed to update ride status' };
     }
   }
 };

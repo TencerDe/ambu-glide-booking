@@ -49,14 +49,14 @@ const DriverLogin = () => {
     
     try {
       setIsSubmitting(true);
-      // Pass email and password as separate arguments to match the function signature
+      // Pass username and password as separate arguments to match the function signature
       const response = await driverService.login(formData.username, formData.password);
       
       if (response.success) {
         toast.success(`Welcome, Driver`);
         navigate(from);
       } else {
-        toast.error('Login failed. Please check your credentials.');
+        toast.error(response.error || 'Login failed. Please check your credentials.');
       }
     } catch (error: any) {
       console.error('Login error:', error);

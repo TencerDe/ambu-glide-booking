@@ -1,80 +1,57 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Profile from "./pages/Profile";
-import NotFound from "./pages/NotFound";
-import { AuthProvider } from "./hooks/useAuth";
-import ProtectedRoute from "./components/ProtectedRoute";
-import BookAmbulance from "./pages/BookAmbulance";
-import DriverLogin from "./pages/driver/DriverLogin";
-import AdminLogin from "./pages/admin/AdminLogin";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import DriverDashboard from "./pages/driver/DriverDashboard";
-import { initializeTestDriver } from "./services/initData";
+import React, { useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import './App.css';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+// Pages
+import Index from './pages/Index';
+import Login from './pages/Login';
+import Profile from './pages/Profile';
+import BookAmbulance from './pages/BookAmbulance';
+import NotFound from './pages/NotFound';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import DriverLogin from './pages/driver/DriverLogin';
+import DriverDashboard from './pages/driver/DriverDashboard';
 
-const App = () => {
-  // Initialize test driver on app startup
+// Components
+import ProtectedRoute from './components/ProtectedRoute';
+import { initTestDriver } from './services/initTestDriver';
+
+function App() {
   useEffect(() => {
-    const initDriver = async () => {
-      await initializeTestDriver();
+    // Initialize test data
+    const setupTestData = async () => {
+      try {
+        await initTestDriver();
+      } catch (error) {
+        console.error("Error setting up test data:", error);
+      }
     };
     
-    initDriver();
+    setupTestData();
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <Toaster />
-            <Sonner />
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/book-ambulance" element={<BookAmbulance />} />
-              <Route path="/driver/login" element={<DriverLogin />} />
-              
-              {/* Admin routes */}
-              <Route path="/admin" element={<AdminLogin />} />
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              
-              {/* Protected routes */}
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              
-              <Route path="/driver/dashboard" element={<DriverDashboard />} />
-              
-              {/* Catch-all route */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/bookAmbulance" element={<BookAmbulance />} />
+      
+      {/* Protected Routes */}
+      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      
+      {/* Admin Routes */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/dashboard/*" element={<ProtectedRoute role="ADMIN"><AdminDashboard /></ProtectedRoute>} />
+      
+      {/* Driver Routes */}
+      <Route path="/driver/login" element={<DriverLogin />} />
+      <Route path="/driver/dashboard/*" element={<ProtectedRoute role="driver"><DriverDashboard /></ProtectedRoute>} />
+      
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
-};
+}
 
 export default App;
