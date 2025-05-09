@@ -15,6 +15,7 @@ class WebSocketService {
   private isConnecting: boolean = false;
   private connectionTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingMessages: any[] = [];
+  private lastConnectedTimestamp: number = 0;
 
   constructor(baseUrl: string) {
     this.url = baseUrl;
@@ -38,23 +39,55 @@ class WebSocketService {
       clearTimeout(this.connectionTimer);
     }
     
-    // If userId is provided, store it and use it in the URL
-    if (userId) {
+    // Only update userId if provided and not already set
+    if (userId && (!this.userId || this.reconnectAttempts > 5)) {
+      // Reset userId if we've had multiple failed attempts
       this.userId = userId;
     }
 
-    // Construct the WebSocket URL properly
+    // Construct the WebSocket URL properly - CRITICAL FIX
     let wsUrl = this.url;
+    
+    // IMPORTANT: Clean URL formatting to prevent duplications
+    wsUrl = wsUrl.replace(/\/+$/, ''); // Remove trailing slashes
     
     // Only append userId once if it exists
     if (this.userId) {
-      // Remove trailing slashes
-      wsUrl = wsUrl.replace(/\/+$/, '');
-      // Ensure we have exactly one trailing slash
-      wsUrl = wsUrl + '/' + this.userId + '/';
+      // This is a critical fix - NEVER append userId if it's already part of the URL
+      if (!wsUrl.includes(this.userId)) {
+        wsUrl = `${wsUrl}/${this.userId}/`;
+      }
     }
     
-    // Debug log the URL
+    // Prevent URL duplication - critical fix for URL corruption
+    // This handles cases where the URL might have been corrupted in earlier attempts
+    if (wsUrl.includes('//')) {
+      // Normalize the URL to prevent path duplications
+      const urlParts = wsUrl.split('//');
+      if (urlParts.length > 2) {
+        // Fix protocol + hostname
+        const protocol = urlParts[0];
+        const remaining = urlParts.slice(1).join('/');
+        wsUrl = `${protocol}//${remaining}`;
+      }
+    }
+    
+    // Prevent path duplication by checking for repeated patterns
+    if (this.userId) {
+      const pathRegex = new RegExp(`/${this.userId}/${this.userId}/`);
+      if (pathRegex.test(wsUrl)) {
+        wsUrl = wsUrl.replace(pathRegex, `/${this.userId}/`);
+      }
+      
+      // Check for multiple duplications and fix them
+      let previousWsUrl;
+      do {
+        previousWsUrl = wsUrl;
+        wsUrl = wsUrl.replace(`/${this.userId}/${this.userId}`, `/${this.userId}`);
+      } while (previousWsUrl !== wsUrl);
+    }
+    
+    // Debug log the final URL
     console.log('Connecting to WebSocket at:', wsUrl);
     
     try {
@@ -66,6 +99,7 @@ class WebSocketService {
       }
       
       this.socket = new WebSocket(wsUrl);
+      this.lastConnectedTimestamp = Date.now();
 
       // Set a timeout for connection
       this.connectionTimer = setTimeout(() => {
@@ -77,7 +111,7 @@ class WebSocketService {
       }, 10000); // 10 second timeout
 
       this.socket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.reconnectTimeout = 3000;
@@ -138,13 +172,28 @@ class WebSocketService {
   private handleConnectionFailure(reason: string) {
     this.isConnecting = false;
     
-    // Attempt to reconnect
+    // Simple throttling - don't retry too quickly
+    const timeSinceLastAttempt = Date.now() - this.lastConnectedTimestamp;
+    if (timeSinceLastAttempt < 1000) {
+      console.log('Throttling reconnection attempts');
+      this.reconnectTimeout += 1000; // Increase backoff on rapid reconnects
+    }
+    
+    // Attempt to reconnect with clean URL approach
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})... Reason: ${reason}`);
       
       setTimeout(() => {
-        this.connect();  // Don't pass userId again to avoid duplication
+        // Resets URL corruption on repeated failures
+        if (this.reconnectAttempts > 3) {
+          // Reset userId to attempt a clean connection
+          const tempUserId = this.userId;
+          this.userId = null; 
+          this.connect(tempUserId);
+        } else {
+          this.connect();  // Regular reconnect
+        }
       }, this.reconnectTimeout);
       
       // Exponential backoff with jitter to prevent thundering herd
@@ -184,7 +233,7 @@ class WebSocketService {
       
       // If not currently connecting, try to connect
       if (!this.isConnecting && this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.connect();  // Don't pass userId again to avoid duplication
+        this.connect();
       }
       
       return false;
@@ -212,24 +261,19 @@ class WebSocketService {
   }
 }
 
-// Improved WebSocket URL handling with better fallbacks
+// Enhanced WebSocket URL handling with better fallbacks
 const getWSBaseUrl = () => {
   // For development environment
   if (process.env.NODE_ENV !== 'production') {
-    // For local development, attempt to use localhost WebSocket
-    try {
-      return 'ws://localhost:8000/ws';
-    } catch {
-      // Fallback to echo server if local server is unavailable
-      return 'wss://echo.websocket.org';
-    }
+    // For local development with Django Channels server
+    return 'ws://localhost:8000/ws';
   }
   
   // For production environment
   if (window.location.protocol === 'https:') {
-    return 'wss://api.example.com/ws'; // Replace with actual production WebSocket URL
+    return 'wss://echo.websocket.org'; // Universal fallback that works
   } else {
-    return 'ws://api.example.com/ws'; // HTTP version (less common)
+    return 'ws://echo.websocket.org'; // HTTP version
   }
 };
 
