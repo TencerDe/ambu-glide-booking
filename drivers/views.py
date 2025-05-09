@@ -33,9 +33,6 @@ class DriverLoginView(APIView):
                 
                 logger.info(f"Driver login successful: {driver.id}")
                 
-                # Store latest driver status
-                driver.save()  # This ensures updated_at is refreshed
-                
                 return Response({
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
