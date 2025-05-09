@@ -59,15 +59,28 @@ class DriverStatusView(APIView):
     def post(self, request):
         try:
             driver = request.user.driver
-            status = request.data.get('status')
+            new_status = request.data.get('status')
             
-            if status not in [choice[0] for choice in Driver.STATUS_CHOICES]:
+            if new_status not in [choice[0] for choice in Driver.STATUS_CHOICES]:
                 return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
             
-            driver.status = status
+            # Check if driver is trying to set status to AVAILABLE but has active rides
+            if new_status == 'AVAILABLE':
+                # Check for any active rides
+                active_rides = Ride.objects.filter(
+                    driver=driver,
+                    status__in=['ACCEPTED', 'EN_ROUTE', 'PICKED_UP']
+                ).exists()
+                
+                if active_rides:
+                    return Response({
+                        'error': 'Cannot set status to Available while you have active rides'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            driver.status = new_status
             driver.save()
             
-            return Response({'status': status})
+            return Response({'status': new_status})
         except Driver.DoesNotExist:
             return Response({'error': 'Driver profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -83,6 +96,7 @@ class AcceptRideView(APIView):
             ride.status = 'ACCEPTED'
             ride.save()
             
+            # Automatically set driver status to BUSY when accepting a ride
             driver.status = 'BUSY'
             driver.save()
             

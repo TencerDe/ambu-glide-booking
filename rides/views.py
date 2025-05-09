@@ -74,7 +74,7 @@ class RideAcceptanceView(APIView):
                 ride.status = 'ACCEPTED'
                 ride.save()
                 
-                # Update the driver status
+                # Update the driver status to BUSY
                 driver.status = 'BUSY'
                 driver.save()
                 

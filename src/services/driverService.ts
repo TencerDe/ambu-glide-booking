@@ -349,7 +349,8 @@ export const driverService = {
               'Prefer': 'return=minimal'
             },
             body: JSON.stringify({
-              is_available: true
+              is_available: true,
+              status: 'AVAILABLE'
             })
           }
         );
@@ -360,6 +361,7 @@ export const driverService = {
           try {
             const driverData = JSON.parse(driverDataStr);
             driverData.is_available = true;
+            driverData.status = 'AVAILABLE';
             localStorage.setItem('driverData', JSON.stringify(driverData));
           } catch (e) {
             console.error('Error updating driver data in localStorage:', e);
@@ -371,6 +373,83 @@ export const driverService = {
     } catch (error: any) {
       console.error('Error updating ride status:', error);
       return { success: false, error: error.message || 'Failed to update ride status' };
+    }
+  },
+
+  // New: Update driver availability status
+  updateDriverStatus: async (status: string) => {
+    try {
+      const driverId = localStorage.getItem('driverId');
+      
+      if (!driverId) {
+        throw new Error('Driver not authenticated');
+      }
+      
+      // Check if driver has active rides before setting to AVAILABLE
+      if (status === 'AVAILABLE') {
+        const activeRidesResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/ride_requests?driver_id=eq.${driverId}&or=(status.eq.accepted,status.eq.en_route,status.eq.picked_up)`,
+          {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (!activeRidesResponse.ok) {
+          throw new Error('Failed to check active rides');
+        }
+        
+        const activeRides = await activeRidesResponse.json();
+        if (activeRides && activeRides.length > 0) {
+          return { 
+            success: false, 
+            error: 'Cannot set status to Available while you have active rides' 
+          };
+        }
+      }
+      
+      // Update driver status
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            status,
+            is_available: status === 'AVAILABLE'
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to update driver status');
+      }
+      
+      // Update driver data in localStorage
+      const driverDataStr = localStorage.getItem('driverData');
+      if (driverDataStr) {
+        try {
+          const driverObj = JSON.parse(driverDataStr);
+          driverObj.status = status;
+          driverObj.is_available = status === 'AVAILABLE';
+          localStorage.setItem('driverData', JSON.stringify(driverObj));
+        } catch (e) {
+          console.error('Error updating driver data in localStorage:', e);
+        }
+      }
+      
+      return { success: true, data: { message: `Status updated to ${status}` } };
+    } catch (error: any) {
+      console.error('Error updating driver status:', error);
+      return { success: false, error: error.message || 'Failed to update driver status' };
     }
   },
 
