@@ -14,6 +14,7 @@ class WebSocketService {
   private url: string;
   private userId: string | null = null;
   private isConnecting: boolean = false;
+  private connectionTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(baseUrl: string) {
     this.url = baseUrl;
@@ -23,6 +24,11 @@ class WebSocketService {
     if (this.socket?.readyState === WebSocket.OPEN || this.isConnecting) return;
     
     this.isConnecting = true;
+    
+    // Clear any existing connection timer
+    if (this.connectionTimer) {
+      clearTimeout(this.connectionTimer);
+    }
     
     // If userId is provided, store it and use it in the URL
     if (userId) {
@@ -35,11 +41,27 @@ class WebSocketService {
       console.log('Connecting to WebSocket at:', this.url);
       this.socket = new WebSocket(this.url);
 
+      // Set a timeout for connection
+      this.connectionTimer = setTimeout(() => {
+        if (this.socket && this.socket.readyState !== WebSocket.OPEN) {
+          console.log('WebSocket connection timed out, retrying...');
+          this.socket.close();
+          this.isConnecting = false;
+          this.connect(userId); // Try to reconnect
+        }
+      }, 10000); // 10 second timeout
+
       this.socket.onopen = () => {
         console.log('WebSocket connected');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.reconnectTimeout = 3000;
+        
+        if (this.connectionTimer) {
+          clearTimeout(this.connectionTimer);
+          this.connectionTimer = null;
+        }
+        
         this.statusHandlers.forEach(handler => handler('connected'));
       };
 
@@ -56,12 +78,24 @@ class WebSocketService {
       this.socket.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.isConnecting = false;
+        
+        if (this.connectionTimer) {
+          clearTimeout(this.connectionTimer);
+          this.connectionTimer = null;
+        }
+        
         this.statusHandlers.forEach(handler => handler('error'));
       };
 
       this.socket.onclose = (event) => {
         console.log('WebSocket closed, code:', event.code, 'reason:', event.reason);
         this.isConnecting = false;
+        
+        if (this.connectionTimer) {
+          clearTimeout(this.connectionTimer);
+          this.connectionTimer = null;
+        }
+        
         this.statusHandlers.forEach(handler => handler('disconnected'));
         
         // Attempt to reconnect
@@ -69,7 +103,7 @@ class WebSocketService {
           this.reconnectAttempts++;
           console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
           setTimeout(() => {
-            this.connect();
+            this.connect(this.userId || undefined);
           }, this.reconnectTimeout);
           // Exponential backoff
           this.reconnectTimeout *= 2;
@@ -80,10 +114,20 @@ class WebSocketService {
     } catch (error) {
       console.error('WebSocket connection error:', error);
       this.isConnecting = false;
+      
+      if (this.connectionTimer) {
+        clearTimeout(this.connectionTimer);
+        this.connectionTimer = null;
+      }
     }
   }
 
   disconnect() {
+    if (this.connectionTimer) {
+      clearTimeout(this.connectionTimer);
+      this.connectionTimer = null;
+    }
+    
     if (this.socket) {
       console.log('Disconnecting WebSocket');
       this.socket.close();

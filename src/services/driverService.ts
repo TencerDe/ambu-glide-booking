@@ -137,7 +137,7 @@ export const driverService = {
         .from('drivers')
         .select('is_available')
         .eq('id', driverId)
-        .single();
+        .maybeSingle();
         
       if (driverError) {
         console.error('Error checking driver status:', driverError);
@@ -151,8 +151,10 @@ export const driverService = {
       // Check if the ride is still available (pending and no driver assigned)
       const { data: rideCheck, error: rideCheckError } = await supabase
         .from('ride_requests')
-        .select('status, driver_id')
+        .select('*')  // Select all fields to get complete ride data
         .eq('id', rideId)
+        .eq('status', 'pending')  // Only get rides with pending status
+        .is('driver_id', null)    // Only get rides with no driver assigned
         .maybeSingle(); // Using maybeSingle instead of single to prevent errors
         
       if (rideCheckError) {
@@ -160,9 +162,12 @@ export const driverService = {
         throw new Error('Failed to check ride status');
       }
       
-      if (!rideCheck || rideCheck.status !== 'pending' || rideCheck.driver_id) {
+      if (!rideCheck) {
+        console.error('Ride not available:', rideId);
         throw new Error('This ride is no longer available');
       }
+      
+      console.log('Ride check succeeded, ride is available:', rideCheck);
       
       // Update the ride request in Supabase directly
       const { data: rideData, error: rideError } = await supabase
