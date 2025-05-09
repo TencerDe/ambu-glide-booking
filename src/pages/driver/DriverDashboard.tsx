@@ -4,12 +4,12 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { driverService } from '@/services/driverService';
 import { supabase } from '@/integrations/supabase/client';
+import { rideAcceptanceService } from '@/services/rideAcceptanceService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building, Check, X, Navigation } from 'lucide-react';
+import { Bell, Clock, MapPin, Calendar, User, DollarSign, Building, Check, Navigation } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { driverNotificationsSocket, useWebSocket } from '@/services/websocketService';
 
 interface RideRequest {
   id: string;
@@ -27,84 +27,77 @@ interface RideRequest {
   longitude?: number;
 }
 
-const MAX_ACCEPT_ATTEMPTS = 5;
+const POLLING_INTERVAL = 5000; // 5 seconds
 
 const DriverDashboard = () => {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [acceptingRide, setAcceptingRide] = useState<string | null>(null);
-  const [acceptAttempts, setAcceptAttempts] = useState<{[key: string]: number}>({});
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentRide, setCurrentRide] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastPolled, setLastPolled] = useState<number>(0);
   const { logout } = useAuth();
   const navigate = useNavigate();
   const driverId = localStorage.getItem('driverId');
 
-  // Fetch initial ride requests and driver profile on component mount
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
+  // Function to fetch ride requests and driver profile
+  const fetchData = useCallback(async () => {
+    try {
+      if (loading) setLoading(true);
+      
+      // Get driver profile
+      const profileResponse = await driverService.getDriverProfile();
+      setDriverProfile(profileResponse.data);
+      
+      // Poll for ride requests or active ride
+      const { data, hasActiveRide, activeRide } = await rideAcceptanceService.pollRideRequests();
+      
+      if (hasActiveRide && activeRide) {
+        setCurrentRide(activeRide);
+        setRideRequests([]);
+      } else {
+        setRideRequests(data);
         
-        // Get driver profile
-        const profileResponse = await driverService.getDriverProfile();
-        setDriverProfile(profileResponse.data);
-        
-        // Check for current active ride
-        const currentRideResponse = await driverService.getCurrentRide();
-        if (currentRideResponse.data) {
-          setCurrentRide(currentRideResponse.data);
+        // Only check for current ride if we don't already know about it
+        if (!currentRide) {
+          const currentRideResponse = await driverService.getCurrentRide();
+          if (currentRideResponse.data) {
+            setCurrentRide(currentRideResponse.data);
+            setRideRequests([]);
+          }
         }
-        
-        // Only get ride requests if driver doesn't have an active ride
-        if (!currentRideResponse.data) {
-          const rideResponse = await driverService.getRideRequests();
-          setRideRequests(rideResponse.data);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        toast.error('Failed to load dashboard data');
-      } finally {
-        setLoading(false);
       }
-    };
+      
+      setLastPolled(Date.now());
+      setError(null);
+    } catch (err: any) {
+      console.error('Error fetching data:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, currentRide]);
 
+  // Initial load
+  useEffect(() => {
     fetchData();
   }, []);
 
-  // Handle WebSocket messages for driver notifications
-  const handleDriverMessage = useCallback((data: any) => {
-    console.log('Driver notification received:', data);
+  // Poll for new ride requests
+  useEffect(() => {
+    // Don't poll if we have a current ride
+    if (currentRide) return;
     
-    if (data.type === 'new_ride_request' && data.ride && !currentRide) {
-      // Add the new ride request to the top of the list
-      setRideRequests(current => {
-        // Check if this ride is already in the list
-        const exists = current.some(ride => ride.id === data.ride.id);
-        if (exists) return current;
-        return [data.ride, ...current];
-      });
-      
-      // Show notification
-      toast.info('New ride request received!', {
-        description: `From: ${data.ride.address}`
-      });
-    }
-  }, [currentRide]);
-  
-  // Use WebSocket hook for driver notifications
-  const { sendMessage, isConnected, connect } = useWebSocket(
-    driverNotificationsSocket,
-    handleDriverMessage,
-    (status) => {
-      console.log('WebSocket status:', status);
-      // Reconnect on disconnection
-      if (status === 'disconnected' && driverId) {
-        setTimeout(() => connect(driverId), 2000);
+    const interval = setInterval(() => {
+      // Only poll if we haven't polled in the last interval
+      if (Date.now() - lastPolled > POLLING_INTERVAL) {
+        fetchData();
       }
-    },
-    driverId || undefined
-  );
+    }, POLLING_INTERVAL);
+    
+    return () => clearInterval(interval);
+  }, [fetchData, lastPolled, currentRide]);
 
   // Set up real-time subscription for ride requests
   useEffect(() => {
@@ -167,7 +160,6 @@ const DriverDashboard = () => {
       )
       .subscribe();
     
-    // Cleanup subscription on component unmount or when current ride changes
     return () => {
       supabase.removeChannel(channel);
     };
@@ -185,92 +177,43 @@ const DriverDashboard = () => {
 
   const handleAcceptRide = async (rideId: string) => {
     try {
-      setAcceptingRide(rideId); // Set the ID of the ride being accepted
+      setAcceptingRide(rideId);
+      setError(null);
+      toast.loading('Accepting ride...');
       
-      // Track number of attempts for this specific ride
-      const currentAttempts = acceptAttempts[rideId] || 0;
-      setAcceptAttempts(prev => ({
-        ...prev,
-        [rideId]: currentAttempts + 1
-      }));
+      // Use our new reliable ride acceptance service
+      const result = await rideAcceptanceService.acceptRide(rideId);
       
-      // Display toast message showing attempt
-      if (currentAttempts > 0) {
-        toast.info(`Attempting to accept ride (Attempt ${currentAttempts + 1})...`);
+      if (result.success) {
+        toast.dismiss();
+        toast.success('Ride accepted successfully!');
+        
+        // Update the local state - remove all pending rides and set current ride
+        setRideRequests([]);
+        setCurrentRide(result.ride);
+        
+        // Update driver profile to reflect busy status
+        if (driverProfile) {
+          setDriverProfile({
+            ...driverProfile,
+            is_available: false
+          });
+        }
       } else {
-        toast.info('Accepting ride...');
+        toast.dismiss();
+        toast.error(result.message);
+        setError(result.message);
+        
+        // Refresh ride requests in case this one is no longer available
+        fetchData();
       }
-      
-      // Send a status update via WebSocket before accepting
-      sendMessage({
-        type: 'status_update',
-        status: 'BUSY'
-      });
-      
-      // Wait a short time for WebSocket message to go through
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Now try to accept the ride
-      const response = await driverService.acceptRide(rideId);
-      console.log('Accept ride response:', response);
-      
-      // Update the local state - remove all pending rides and set current ride
-      setRideRequests([]);
-      setCurrentRide(response.data.ride);
-      
-      // Update driver profile to reflect busy status
-      if (driverProfile) {
-        setDriverProfile({
-          ...driverProfile,
-          is_available: false
-        });
-      }
-      
-      toast.success('Ride accepted successfully!');
-      
-      // Reset attempt counter for this ride
-      setAcceptAttempts(prev => ({
-        ...prev,
-        [rideId]: 0
-      }));
-      
-      setAcceptingRide(null);
     } catch (error: any) {
-      console.error('Error accepting ride:', error);
-      
-      const attempts = acceptAttempts[rideId] || 0;
-      
-      if (attempts < MAX_ACCEPT_ATTEMPTS - 1) {
-        toast.error(`Failed to accept ride: ${error.message}. Retrying...`);
-        
-        // Automatically retry after a short delay
-        setTimeout(() => {
-          if (acceptingRide === rideId) { // Only retry if the user hasn't clicked to accept another ride
-            handleAcceptRide(rideId);
-          }
-        }, 1000 + (attempts * 500)); // Increasing delay with each retry
-      } else {
-        toast.error(`Failed to accept ride after multiple attempts: ${error.message}`);
-        
-        // Reset accepting state and attempts after max retries
-        setAcceptAttempts(prev => ({
-          ...prev,
-          [rideId]: 0
-        }));
-        setAcceptingRide(null);
-        
-        // Trigger a refresh of the ride requests
-        const refreshRides = async () => {
-          try {
-            const rideResponse = await driverService.getRideRequests();
-            setRideRequests(rideResponse.data);
-          } catch (refreshError) {
-            console.error('Error refreshing ride requests:', refreshError);
-          }
-        };
-        
-        refreshRides();
-      }
+      console.error('Error in handleAcceptRide:', error);
+      toast.dismiss();
+      toast.error(error.message || 'Failed to accept ride');
+      setError(error.message || 'Failed to accept ride');
+    } finally {
+      setAcceptingRide(null);
     }
   };
   
@@ -278,6 +221,8 @@ const DriverDashboard = () => {
     if (!currentRide) return;
     
     try {
+      toast.loading(`Updating ride status...`);
+      
       // Get current position for location updates
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -285,57 +230,76 @@ const DriverDashboard = () => {
             const { latitude, longitude } = position.coords;
             const location = { lat: latitude, lng: longitude };
             
-            const response = await driverService.updateRideStatus(currentRide.id, status, location);
+            const result = await rideAcceptanceService.updateRideStatus(currentRide.id, status, location);
             
-            if (status === 'en_route') {
-              toast.success('Status updated: On the way to pickup');
-            } else if (status === 'picked_up') {
-              toast.success('Status updated: Patient picked up');
-            } else if (status === 'completed') {
-              toast.success('Ride completed successfully!');
-              // Clear current ride and fetch new requests
-              setCurrentRide(null);
-              const rideResponse = await driverService.getRideRequests();
-              setRideRequests(rideResponse.data);
-            }
-            
-            // Update current ride state if not completed
-            if (status !== 'completed') {
-              setCurrentRide({
-                ...currentRide,
-                status,
-                driver_latitude: latitude,
-                driver_longitude: longitude
-              });
+            if (result.success) {
+              toast.dismiss();
+              if (status === 'en_route') {
+                toast.success('Status updated: On the way to pickup');
+              } else if (status === 'picked_up') {
+                toast.success('Status updated: Patient picked up');
+              } else if (status === 'completed') {
+                toast.success('Ride completed successfully!');
+                // Clear current ride and fetch new requests
+                setCurrentRide(null);
+                fetchData();
+              }
+              
+              // Update current ride state if not completed
+              if (status !== 'completed') {
+                setCurrentRide({
+                  ...currentRide,
+                  status,
+                  driver_latitude: latitude,
+                  driver_longitude: longitude
+                });
+              }
+            } else {
+              toast.dismiss();
+              toast.error(result.message);
+              setError(result.message);
             }
           },
           (error) => {
             console.error('Error getting location:', error);
+            toast.dismiss();
             toast.error('Failed to get your current location');
           }
         );
       } else {
         // If geolocation is not available, update without location
-        const response = await driverService.updateRideStatus(currentRide.id, status);
+        const result = await rideAcceptanceService.updateRideStatus(currentRide.id, status);
         
-        if (status === 'completed') {
-          toast.success('Ride completed successfully!');
-          // Clear current ride and fetch new requests
-          setCurrentRide(null);
-          const rideResponse = await driverService.getRideRequests();
-          setRideRequests(rideResponse.data);
+        if (result.success) {
+          toast.dismiss();
+          if (status === 'completed') {
+            toast.success('Ride completed successfully!');
+            // Clear current ride and fetch new requests
+            setCurrentRide(null);
+            fetchData();
+          } else {
+            // Update current ride state
+            setCurrentRide({
+              ...currentRide,
+              status
+            });
+          }
         } else {
-          // Update current ride state
-          setCurrentRide({
-            ...currentRide,
-            status
-          });
+          toast.dismiss();
+          toast.error(result.message);
         }
       }
     } catch (error: any) {
+      toast.dismiss();
       console.error('Error updating ride status:', error);
       toast.error(error.message || 'Failed to update ride status');
+      setError(error.message || 'Failed to update ride status');
     }
+  };
+
+  const handleManualRefresh = () => {
+    fetchData();
+    toast.info('Refreshing ride requests...');
   };
 
   const handleLogout = () => {
@@ -358,14 +322,34 @@ const DriverDashboard = () => {
                   <p className="text-gray-600">Welcome, {driverProfile.name}</p>
                 )}
               </div>
-              <Button 
-                variant="outline" 
-                className="flex items-center gap-2" 
-                onClick={handleLogout}
-              >
-                Logout
-              </Button>
+              <div className="flex gap-2">
+                {!currentRide && (
+                  <Button 
+                    variant="outline"
+                    className="flex items-center gap-2" 
+                    onClick={handleManualRefresh}
+                    disabled={loading}
+                  >
+                    {loading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-2" 
+                  onClick={handleLogout}
+                >
+                  Logout
+                </Button>
+              </div>
             </div>
+            
+            {/* Error message display */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded-md">
+                <p className="font-medium">Error: {error}</p>
+                <p className="text-xs mt-1">If this persists, please try refreshing the page.</p>
+              </div>
+            )}
             
             {/* Driver Information */}
             {driverProfile && (
@@ -395,13 +379,6 @@ const DriverDashboard = () => {
                     </div>
                   )}
                 </div>
-                
-                {!isConnected && (
-                  <div className="mt-4 p-2 bg-amber-50 text-amber-700 rounded-md text-sm flex items-center">
-                    <Bell className="h-4 w-4 mr-2" />
-                    <span>Using offline mode. Some features might be delayed.</span>
-                  </div>
-                )}
               </div>
             )}
             
@@ -589,6 +566,14 @@ const DriverDashboard = () => {
                   <div className="bg-gray-50 rounded-lg p-8 text-center">
                     <p className="text-gray-500">No new ride requests available at the moment.</p>
                     <p className="text-gray-500 text-sm mt-2">New requests will appear here automatically.</p>
+                    <Button 
+                      onClick={handleManualRefresh} 
+                      variant="outline" 
+                      className="mt-4"
+                      disabled={loading}
+                    >
+                      {loading ? 'Refreshing...' : 'Refresh Now'}
+                    </Button>
                   </div>
                 )}
               </div>
