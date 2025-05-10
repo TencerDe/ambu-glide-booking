@@ -50,6 +50,11 @@ function App() {
           {/* Add redirect from /admin to /admin/login */}
           <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
           <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={
+            <ProtectedRoute role="ADMIN">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="/admin/dashboard/*" element={
             <ProtectedRoute role="ADMIN">
               <AdminDashboard />

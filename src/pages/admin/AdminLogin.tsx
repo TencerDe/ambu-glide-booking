@@ -8,6 +8,7 @@ import { adminService } from '@/services/adminService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { ShieldCheck } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const AdminLogin = () => {
   const [formData, setFormData] = useState({
@@ -17,6 +18,7 @@ const AdminLogin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -39,8 +41,14 @@ const AdminLogin = () => {
       setIsSubmitting(true);
       // For demo purposes, hardcoded credential check
       if (formData.username === "admin@ambuk.com" && formData.password === "admin123") {
+        // Store admin credentials properly
         localStorage.setItem('token', 'admin-demo-token');
-        localStorage.setItem('role', 'admin');
+        localStorage.setItem('user', JSON.stringify({
+          name: 'Admin',
+          email: 'admin@ambuk.com',
+          role: 'ADMIN'  // Use uppercase ADMIN to match the role check in ProtectedRoute
+        }));
+        localStorage.setItem('role', 'ADMIN');
         toast.success('Logged in as Admin');
         navigate('/admin/dashboard');
       } else {
