@@ -1,67 +1,69 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-/**
- * Initialize a test driver account in the database
- */
 export const initTestDriver = async () => {
   try {
-    console.log("Creating test driver...");
+    console.log('Creating test driver...');
     
-    // Check if driver already exists
-    const { data: existingDrivers } = await supabase
+    // Check if test driver already exists
+    const { data: existingDriver } = await supabase
       .from('drivers')
       .select('*')
-      .eq('username', 'driver1');
-    
-    if (existingDrivers && existingDrivers.length > 0) {
-      console.log("Test driver already exists:", existingDrivers[0].id);
-      return existingDrivers[0];
+      .eq('username', 'testdriver')
+      .single();
+      
+    if (existingDriver) {
+      console.log('Test driver already exists, skipping creation');
+      return existingDriver;
     }
     
-    // Create driver
-    const { data: driver, error: driverError } = await supabase
+    // Create a new user for the driver
+    const { data: userData, error: userError } = await supabase.auth.signUp({
+      email: 'testdriver@example.com',
+      password: 'test123456',
+      options: {
+        data: {
+          full_name: 'Test Driver',
+          user_type: 'DRIVER'
+        }
+      }
+    });
+    
+    if (userError) {
+      throw new Error(`Failed to create user: ${userError.message}`);
+    }
+    
+    if (!userData.user) {
+      throw new Error('No user data returned');
+    }
+    
+    // Create driver record
+    // Remove the 'vehicle_model' field that's causing the error
+    const { data: driverData, error: driverError } = await supabase
       .from('drivers')
-      .insert([
-        {
-          name: 'Test Driver',
-          username: 'driver1',
-          phone_number: '1234567890',
-          license_number: 'DL12345',
-          vehicle_number: 'MH-01-AB-1234',
-          vehicle_model: 'Ambulance Type A',
-          is_available: true
-        }
-      ])
-      .select();
-    
-    if (driverError || !driver || driver.length === 0) {
-      throw new Error(`Failed to create driver: ${driverError?.message || 'Unknown error'}`);
+      .insert({
+        user_id: userData.user.id,
+        name: 'Test Driver',
+        username: 'testdriver',
+        phone_number: '9876543210',
+        vehicle_number: 'DL-01-AB-1234',
+        status: 'AVAILABLE',
+        is_available: true
+      })
+      .select()
+      .single();
+      
+    if (driverError) {
+      throw new Error(`Failed to create driver: ${driverError.message}`);
     }
     
-    // Create driver credentials
-    const { error: credentialsError } = await supabase
-      .from('driver_credentials')
-      .insert([
-        {
-          driver_id: driver[0].id,
-          password: 'password123'
-        }
-      ]);
+    console.log('Test driver created successfully:', driverData);
+    return driverData;
     
-    if (credentialsError) {
-      // Cleanup the driver if credentials creation fails
-      await supabase.from('drivers').delete().eq('id', driver[0].id);
-      throw new Error(`Failed to create credentials: ${credentialsError.message}`);
-    }
-    
-    console.log("Test driver created successfully:", driver[0].id);
-    console.log("Username: driver1");
-    console.log("Password: password123");
-    
-    return driver[0];
-  } catch (error) {
-    console.error("Error creating test driver:", error);
-    return null;
+  } catch (error: any) {
+    console.error('Error creating test driver:', error);
+    toast.error('Failed to create test driver');
+    throw error;
   }
 };

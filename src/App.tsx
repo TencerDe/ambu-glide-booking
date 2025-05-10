@@ -18,6 +18,7 @@ import DriverDashboard from './pages/driver/DriverDashboard';
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
 import { initTestDriver } from './services/initTestDriver';
+import { driverNotificationsSocket, userRideSocket } from './services/websocketService';
 
 function App() {
   useEffect(() => {
@@ -31,6 +32,28 @@ function App() {
     };
     
     setupTestData();
+    
+    // Initialize WebSocket connections if user is logged in
+    const userId = localStorage.getItem('userId');
+    const role = localStorage.getItem('role');
+    
+    if (userId) {
+      if (role === 'driver') {
+        // Connect driver notifications socket
+        driverNotificationsSocket.connect(userId);
+        console.log('Driver WebSocket initialized for user:', userId);
+      } else {
+        // Connect user ride status socket
+        userRideSocket.connect(userId);
+        console.log('User WebSocket initialized for user:', userId);
+      }
+    }
+    
+    // Cleanup function
+    return () => {
+      driverNotificationsSocket.disconnect();
+      userRideSocket.disconnect();
+    };
   }, []);
 
   return (

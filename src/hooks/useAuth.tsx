@@ -1,128 +1,125 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { userService } from '../services/userService';
-import { driverService } from '../services/driverService';
+import { supabase } from '@/integrations/supabase/client';
+import { driverNotificationsSocket, userRideSocket } from '@/services/websocketService';
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  user: { 
-    name: string; 
-    email: string; 
-    photoUrl?: string;
-    bloodGroup?: string;
-    age?: number;
-    preferredHospital?: string;
-    healthIssues?: string[];
-    role?: string; // Role property
-  } | null;
-  googleLogin: (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => void;
+  user: any;
+  login: (email: string, password: string, type: string) => Promise<any>;
   logout: () => void;
-  updateProfile: (profileData: { 
-    bloodGroup?: string;
-    age?: number;
-    preferredHospital?: string;
-    healthIssues?: string[];
-  }) => void;
+  loading: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<AuthContextType['user']>(null);
-  const navigate = useNavigate();
-
-  // Check if the user is authenticated on mount
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('role');
+    // Check if user is already logged in
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('userData');
+    const storedRole = localStorage.getItem('role');
+    const storedUserId = localStorage.getItem('userId');
     
-    console.log('Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser, role });
+    console.log('Auth initialization:', {
+      hasToken: !!storedToken,
+      hasStoredUser: !!storedUser,
+      role: storedRole
+    });
     
-    if (storedUser && token) {
+    if (storedToken && storedUser) {
       try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        setIsAuthenticated(true);
-        console.log('User authenticated from storage:', parsedUser);
-      } catch (error) {
-        console.error('Error parsing stored user:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        
+        // Initialize WebSocket connection based on role
+        if (storedUserId) {
+          if (storedRole === 'driver') {
+            driverNotificationsSocket.connect(storedUserId);
+            console.log('Driver WebSocket reconnected for user:', storedUserId);
+          } else {
+            userRideSocket.connect(storedUserId);
+            console.log('User WebSocket reconnected for user:', storedUserId);
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing stored user data:', e);
+        localStorage.removeItem('userData');
       }
     }
+    
+    setLoading(false);
   }, []);
-
-  const googleLogin = async (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => {
+  
+  const login = async (email: string, password: string, type: string) => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      console.log('Logging in with data:', userData);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // Store user and token in local storage
-      localStorage.setItem('user', JSON.stringify(userData));
-      if (userData.token) {
-        localStorage.setItem('token', userData.token);
-      } else {
-        localStorage.setItem('token', 'session-token'); // Set default token if not provided
+      if (error) throw error;
+      
+      if (data && data.user) {
+        // Determine role based on type parameter
+        const role = type.toLowerCase();
+        const userId = data.user.id;
+        
+        // Store auth data
+        localStorage.setItem('token', data.session?.access_token || '');
+        localStorage.setItem('role', role);
+        localStorage.setItem('userId', userId);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        
+        setUser(data.user);
+        
+        // Initialize WebSocket connection based on role
+        if (role === 'driver') {
+          driverNotificationsSocket.connect(userId);
+          driverNotificationsSocket.reconnect(); // Force reconnect to ensure connection
+          console.log('Driver WebSocket initialized on login for user:', userId);
+        } else {
+          userRideSocket.connect(userId);
+          userRideSocket.reconnect(); // Force reconnect to ensure connection
+          console.log('User WebSocket initialized on login for user:', userId);
+        }
+        
+        return { success: true, user: data.user };
       }
       
-      // Make sure to store the role separately as well for consistency
-      if (userData.role) {
-        localStorage.setItem('role', userData.role);
-      }
-      
-      setUser(userData);
-      setIsAuthenticated(true);
-      
-      // Navigate based on role
-      if (userData.role === 'ADMIN') {
-        navigate('/admin/dashboard');
-      } else if (userData.role === 'driver') {
-        navigate('/driver/dashboard');
-      } else {
-        navigate('/profile');
-      }
-    } catch (error) {
-      console.error('Google login error:', error);
-      throw error;
+      return { success: false, message: 'No user data returned' };
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Failed to login');
+      return { success: false, message: err.message };
+    } finally {
+      setLoading(false);
     }
   };
-
-  const updateProfile = (profileData: {
-    bloodGroup?: string;
-    age?: number;
-    preferredHospital?: string;
-    healthIssues?: string[];
-  }) => {
-    if (user) {
-      const updatedUser = { ...user, ...profileData };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-    }
-  };
-
+  
   const logout = () => {
-    const role = localStorage.getItem('role');
+    // Disconnect WebSockets
+    driverNotificationsSocket.disconnect();
+    userRideSocket.disconnect();
     
-    // Use the appropriate service for logout based on role
-    if (role === 'driver') {
-      driverService.logout();
-    } else {
-      userService.logout();
-    }
-    
+    // Clear user data
     localStorage.removeItem('token');
-    localStorage.removeItem('user');
     localStorage.removeItem('role');
-    setIsAuthenticated(false);
+    localStorage.removeItem('userData');
+    localStorage.removeItem('userId');
+    
     setUser(null);
-    navigate('/');
   };
-
+  
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, googleLogin, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, error }}>
       {children}
     </AuthContext.Provider>
   );
