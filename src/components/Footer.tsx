@@ -89,12 +89,12 @@ const Footer = () => {
               <li className="flex items-start space-x-3">
                 <MapPin className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
                 <span className="text-blue-100">
-                  123 Medical Center Drive, New Delhi, India
+                  Ghaziabad, Uttar Pradesh, India
                 </span>
               </li>
               <li className="flex items-center space-x-3">
                 <Mail className="h-5 w-5 text-blue-400 flex-shrink-0" />
-                <span className="text-blue-100">support@ambuk.com</span>
+                <span className="text-blue-100">support@ambuk.life</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Phone className="h-5 w-5 text-blue-400 flex-shrink-0" />
