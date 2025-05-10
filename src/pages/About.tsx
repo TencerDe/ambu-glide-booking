@@ -56,7 +56,7 @@ const About = () => {
               </div>
               <div className="text-center">
                 <Avatar className="w-24 h-24 mx-auto mb-3">
-                  <AvatarImage src="https://images.unsplash.com/photo-1605810230434-7631ac76ec81?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Sachin Bisht" />
+                  <AvatarImage src="/lovable-uploads/bac82e43-5e9b-40e3-a273-7c7fc5fa5b01.png" alt="Sachin Bisht" />
                   <AvatarFallback>SB</AvatarFallback>
                 </Avatar>
                 <h3 className="font-semibold">Sachin Bisht</h3>
