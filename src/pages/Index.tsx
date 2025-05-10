@@ -1,4 +1,3 @@
-
 import React from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -10,8 +9,8 @@ const Index = () => {
   const navigate = useNavigate();
   
   const handleBookingClick = () => {
-    // Direct to booking page without requiring login
-    navigate('/book-ambulance');
+    // Use the route that matches the one in App.tsx
+    navigate('/bookAmbulance');
   };
 
   return (

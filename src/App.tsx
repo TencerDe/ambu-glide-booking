@@ -40,6 +40,8 @@ function App() {
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/bookAmbulance" element={<BookAmbulance />} />
+          {/* Add alternative hyphenated route */}
+          <Route path="/book-ambulance" element={<BookAmbulance />} />
           
           {/* Protected Routes */}
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
