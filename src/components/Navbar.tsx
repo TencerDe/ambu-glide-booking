@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, X, User, LogIn } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,14 +8,14 @@ import { useAuth } from '@/hooks/useAuth';
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
   };
 
-  const openBookingModal = () => {
-    const modal = document.getElementById('booking-modal') as HTMLDialogElement;
-    if (modal) modal.showModal();
+  const handleBookAmbulance = () => {
+    navigate('/bookAmbulance');
   };
 
   return (
@@ -56,7 +56,7 @@ const Navbar = () => {
           <Button 
             variant="secondary" 
             className="btn-animate"
-            onClick={openBookingModal}
+            onClick={handleBookAmbulance}
           >
             Book Ambulance
           </Button>
@@ -120,7 +120,7 @@ const Navbar = () => {
               variant="secondary" 
               className="btn-animate"
               onClick={() => {
-                openBookingModal();
+                navigate('/bookAmbulance');
                 toggleMenu();
               }}
             >
