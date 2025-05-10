@@ -31,19 +31,17 @@ const Footer = () => {
             <div>
               <h3 className="text-lg font-semibold text-white mb-4">Company</h3>
               <ul className="space-y-2">
-                <li><a href="#" className="text-white/80 hover:text-white">About Us</a></li>
-                <li><a href="#" className="text-white/80 hover:text-white">Our Team</a></li>
-                <li><a href="#" className="text-white/80 hover:text-white">Careers</a></li>
-                <li><a href="#" className="text-white/80 hover:text-white">Contact</a></li>
+                <li><Link to="/about" className="text-white/80 hover:text-white">About Us</Link></li>
+                <li><Link to="/contact" className="text-white/80 hover:text-white">Contact</Link></li>
               </ul>
             </div>
             
             <div className="col-span-2 md:col-span-1">
               <h3 className="text-lg font-semibold text-white mb-4">Connect</h3>
               <ul className="space-y-2">
-                <li><a href="#" className="text-white/80 hover:text-white">Facebook</a></li>
-                <li><a href="#" className="text-white/80 hover:text-white">Twitter</a></li>
-                <li><a href="#" className="text-white/80 hover:text-white">Instagram</a></li>
+                <li><a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white">Facebook</a></li>
+                <li><a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white">Twitter</a></li>
+                <li><a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white">Instagram</a></li>
               </ul>
             </div>
           </div>
