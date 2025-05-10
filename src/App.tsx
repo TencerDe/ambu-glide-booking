@@ -58,7 +58,7 @@ function App() {
           
           {/* Driver Routes */}
           <Route path="/driver/login" element={<DriverLogin />} />
-          <Route path="/driver/dashboard/*" element={
+          <Route path="/driver/dashboard" element={
             <ProtectedRoute role="driver">
               <DriverDashboard />
             </ProtectedRoute>

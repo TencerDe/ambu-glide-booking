@@ -17,7 +17,7 @@ const AdminLogin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { googleLogin } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -40,26 +40,19 @@ const AdminLogin = () => {
       setIsSubmitting(true);
       // For demo purposes, hardcoded credential check
       if (formData.username === "admin@ambuk.com" && formData.password === "admin123") {
-        // Store admin credentials properly
+        // Create admin user object with proper role
         const adminUser = {
           name: 'Admin',
           email: 'admin@ambuk.com',
-          role: 'ADMIN'  // Use uppercase ADMIN to match the role check in ProtectedRoute
+          role: 'ADMIN',
+          token: 'admin-demo-token'
         };
         
-        // Store user data consistently
-        localStorage.setItem('token', 'admin-demo-token');
-        localStorage.setItem('user', JSON.stringify(adminUser));
+        // Use the googleLogin method from useAuth to properly set authentication state
+        await googleLogin(adminUser);
         
-        // Force page reload to ensure auth context picks up the new user data
         toast.success('Logged in as Admin');
-        
-        // Delay navigation slightly to allow toast to show
-        setTimeout(() => {
-          navigate('/admin/dashboard');
-          // Force reload to update auth state
-          window.location.reload();
-        }, 500);
+        navigate('/admin/dashboard');
       } else {
         toast.error('Invalid credentials');
       }

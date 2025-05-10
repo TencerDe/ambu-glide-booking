@@ -27,8 +27,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Case insensitive role check
-  if (role && user?.role?.toUpperCase() !== role.toUpperCase()) {
+  // Case insensitive role check with null/undefined handling
+  if (role && (!user?.role || user.role.toUpperCase() !== role.toUpperCase())) {
     console.log(`User doesn't have required role: ${role}, user role is: ${user?.role}`);
     // Redirect to unauthorized page or home
     return <Navigate to="/" replace />;

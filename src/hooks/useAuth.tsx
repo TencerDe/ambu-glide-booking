@@ -48,20 +48,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('Error parsing stored user:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
       }
     }
   }, []);
 
   const googleLogin = async (userData: { name: string; email: string; photoUrl?: string; token?: string; role?: string }) => {
     try {
+      console.log('Logging in with data:', userData);
+      
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(userData));
       if (userData.token) {
         localStorage.setItem('token', userData.token);
       }
+      
       setUser(userData);
       setIsAuthenticated(true);
-      navigate('/profile');
+      
+      // Navigate based on role
+      if (userData.role === 'ADMIN') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/profile');
+      }
     } catch (error) {
       console.error('Google login error:', error);
       throw error;
