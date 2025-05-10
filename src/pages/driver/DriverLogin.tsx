@@ -27,8 +27,11 @@ const DriverLogin = () => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
     
+    console.log('Driver login page check:', { token, role });
+    
     // Verify the role is specifically 'driver'
     if (isAuthenticated && role === 'driver') {
+      console.log('Already authenticated as driver, redirecting to dashboard');
       navigate('/driver/dashboard');
     }
   }, [navigate, isAuthenticated]);
@@ -52,6 +55,8 @@ const DriverLogin = () => {
     
     try {
       setIsSubmitting(true);
+      console.log('Attempting driver login with:', formData.username);
+      
       // Pass username and password as separate arguments to match the function signature
       const response = await driverService.login(formData.username, formData.password);
       
@@ -63,6 +68,8 @@ const DriverLogin = () => {
           role: 'driver',
           token: 'driver-session-token'
         };
+        
+        console.log('Driver login successful, setting auth data:', driverUser);
         
         // Use the googleLogin method from useAuth to properly set authentication state
         await googleLogin(driverUser);

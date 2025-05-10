@@ -37,8 +37,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
     
-    console.log('Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser });
+    console.log('Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser, role });
     
     if (storedUser && token) {
       try {
@@ -50,6 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Error parsing stored user:', error);
         localStorage.removeItem('user');
         localStorage.removeItem('token');
+        localStorage.removeItem('role');
       }
     }
   }, []);
