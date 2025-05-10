@@ -9,6 +9,9 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   error: string | null;
+  isAuthenticated: boolean; // Added missing property
+  googleLogin: (userData: any) => Promise<void>; // Added missing property
+  updateProfile: (data: any) => Promise<void>; // Added missing property
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // Added state for authentication
   
   useEffect(() => {
     // Check if user is already logged in
@@ -35,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const userData = JSON.parse(storedUser);
         setUser(userData);
+        setIsAuthenticated(true); // Set authentication state
         
         // Initialize WebSocket connection based on role
         if (storedUserId) {
@@ -79,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('userData', JSON.stringify(data.user));
         
         setUser(data.user);
+        setIsAuthenticated(true); // Set authentication state
         
         // Initialize WebSocket connection based on role
         if (role === 'driver') {
@@ -104,6 +110,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
+  const googleLogin = async (userData: any) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { name, email, photoUrl, token, role = 'user' } = userData;
+      const userId = Math.random().toString(36).substring(2, 15);
+      
+      // Store auth data
+      localStorage.setItem('token', token || 'google-auth-token');
+      localStorage.setItem('role', role);
+      localStorage.setItem('userId', userId);
+      
+      const userObject = {
+        id: userId,
+        name,
+        email,
+        photoUrl,
+        role
+      };
+      
+      localStorage.setItem('userData', JSON.stringify(userObject));
+      
+      setUser(userObject);
+      setIsAuthenticated(true);
+      
+      // Initialize WebSocket connection based on role
+      if (role === 'driver') {
+        driverNotificationsSocket.connect(userId);
+        console.log('Driver WebSocket initialized on Google login for user:', userId);
+      } else {
+        userRideSocket.connect(userId);
+        console.log('User WebSocket initialized on Google login for user:', userId);
+      }
+      
+      return { success: true, user: userObject };
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setError(err.message || 'Failed to login with Google');
+      return { success: false, message: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const updateProfile = async (profileData: any) => {
+    try {
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Update local user state with new profile data
+      const updatedUser = {
+        ...user,
+        ...profileData
+      };
+      
+      // Store updated user data
+      localStorage.setItem('userData', JSON.stringify(updatedUser));
+      
+      // Update state
+      setUser(updatedUser);
+      
+      return { success: true };
+    } catch (err: any) {
+      console.error('Profile update error:', err);
+      setError(err.message || 'Failed to update profile');
+      return { success: false, message: err.message };
+    }
+  };
+  
   const logout = () => {
     // Disconnect WebSockets
     driverNotificationsSocket.disconnect();
@@ -116,10 +193,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('userId');
     
     setUser(null);
+    setIsAuthenticated(false); // Update authentication state
   };
   
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, error }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading, 
+      error, 
+      isAuthenticated, 
+      googleLogin, 
+      updateProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );
