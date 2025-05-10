@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
+import { driverService } from '../services/driverService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -57,10 +58,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Logging in with data:', userData);
       
-      // Store user in local storage
+      // Store user and token in local storage
       localStorage.setItem('user', JSON.stringify(userData));
       if (userData.token) {
         localStorage.setItem('token', userData.token);
+      } else {
+        localStorage.setItem('token', 'session-token'); // Set default token if not provided
+      }
+      
+      // Make sure to store the role separately as well for consistency
+      if (userData.role) {
+        localStorage.setItem('role', userData.role);
       }
       
       setUser(userData);
@@ -69,6 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Navigate based on role
       if (userData.role === 'ADMIN') {
         navigate('/admin/dashboard');
+      } else if (userData.role === 'driver') {
+        navigate('/driver/dashboard');
       } else {
         navigate('/profile');
       }
@@ -92,9 +102,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    userService.logout();
+    const role = localStorage.getItem('role');
+    
+    // Use the appropriate service for logout based on role
+    if (role === 'driver') {
+      driverService.logout();
+    } else {
+      userService.logout();
+    }
+    
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('role');
     setIsAuthenticated(false);
     setUser(null);
     navigate('/');

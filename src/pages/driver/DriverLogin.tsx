@@ -58,7 +58,7 @@ const DriverLogin = () => {
       if (response.success) {
         // Create driver user object with proper role
         const driverUser = {
-          name: formData.username,
+          name: response.data?.name || formData.username,
           email: formData.username,
           role: 'driver',
           token: 'driver-session-token'
