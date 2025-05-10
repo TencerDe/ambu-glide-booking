@@ -21,13 +21,9 @@ const About = () => {
             
             <h2 className="text-2xl font-semibold mb-4 mt-8">Our Story</h2>
             <p className="text-gray-700 mb-4">
-              Ambuk was founded in 2023 with a simple yet powerful vision: to revolutionize emergency medical transportation 
+              Ambuk was founded in 2025 with a simple yet powerful vision: to revolutionize emergency medical transportation 
               through technology. Our founders witnessed firsthand the challenges people face when trying to get emergency 
               medical transport, and they were determined to create a solution.
-            </p>
-            <p className="text-gray-700 mb-4">
-              What started as a small operation with just three ambulances has now grown into a network of over 100 vehicles 
-              across multiple cities, all connected through our state-of-the-art booking platform.
             </p>
             
             <h2 className="text-2xl font-semibold mb-4 mt-8">Our Approach</h2>
@@ -51,18 +47,23 @@ const About = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
               <div className="text-center">
                 <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
-                <h3 className="font-semibold">Dr. Sarah Johnson</h3>
-                <p className="text-gray-600 text-sm">Medical Director</p>
+                <h3 className="font-semibold">Tanuj Sharma</h3>
+                <p className="text-gray-600 text-sm">Founder and Chief Technical Officer</p>
               </div>
               <div className="text-center">
                 <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
-                <h3 className="font-semibold">Alex Chen</h3>
-                <p className="text-gray-600 text-sm">Chief Technology Officer</p>
+                <h3 className="font-semibold">Sachin Bisht</h3>
+                <p className="text-gray-600 text-sm">Co-Founder and Chief Executive Officer</p>
               </div>
               <div className="text-center">
                 <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
-                <h3 className="font-semibold">Maria Rodriguez</h3>
-                <p className="text-gray-600 text-sm">Operations Manager</p>
+                <h3 className="font-semibold">Lakshay Vashisht</h3>
+                <p className="text-gray-600 text-sm">Co-Founder and Chief Technical Officer</p>
+              </div>
+              <div className="text-center">
+                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                <h3 className="font-semibold">Ambika Pundir</h3>
+                <p className="text-gray-600 text-sm">Co-Founder and Chief Operation Manager</p>
               </div>
             </div>
           </div>
