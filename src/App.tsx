@@ -55,11 +55,6 @@ function App() {
               <AdminDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/admin/dashboard/*" element={
-            <ProtectedRoute role="ADMIN">
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
           
           {/* Driver Routes */}
           <Route path="/driver/login" element={<DriverLogin />} />
