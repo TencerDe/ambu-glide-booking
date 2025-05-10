@@ -7,6 +7,7 @@ import { driverService } from '@/services/driverService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { LogIn } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const DriverLogin = () => {
   const [formData, setFormData] = useState({
@@ -17,6 +18,7 @@ const DriverLogin = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, googleLogin } = useAuth();
   
   const from = (location.state as any)?.from?.pathname || '/driver/dashboard';
 
@@ -25,10 +27,11 @@ const DriverLogin = () => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
     
-    if (token && role === 'driver') {
+    // Verify the role is specifically 'driver'
+    if (isAuthenticated && role === 'driver') {
       navigate('/driver/dashboard');
     }
-  }, [navigate]);
+  }, [navigate, isAuthenticated]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -53,8 +56,19 @@ const DriverLogin = () => {
       const response = await driverService.login(formData.username, formData.password);
       
       if (response.success) {
+        // Create driver user object with proper role
+        const driverUser = {
+          name: formData.username,
+          email: formData.username,
+          role: 'driver',
+          token: 'driver-session-token'
+        };
+        
+        // Use the googleLogin method from useAuth to properly set authentication state
+        await googleLogin(driverUser);
+        
         toast.success(`Welcome, Driver`);
-        navigate(from);
+        navigate('/driver/dashboard');
       } else {
         toast.error(response.error || 'Login failed. Please check your credentials.');
       }

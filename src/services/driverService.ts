@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -53,14 +52,14 @@ export const driverService = {
         return { success: false, error: 'Invalid credentials' };
       }
       
-      // Store driver info in local storage
-      localStorage.setItem('token', 'driver-session-token');
-      localStorage.setItem('role', 'driver');
+      // Store driver info in local storage - we'll now handle this through useAuth
+      // Don't set these directly here anymore, let the useAuth handle it
       localStorage.setItem('driverId', driver.id);
       localStorage.setItem('driverData', JSON.stringify(driver));
+      localStorage.setItem('role', 'driver'); // Make sure role is consistently set
       
       console.log('Driver login successful:', driver.name);
-      return { success: true };
+      return { success: true, data: driver };
       
     } catch (error: any) {
       console.error('Login error:', error);
@@ -77,6 +76,7 @@ export const driverService = {
     localStorage.removeItem('role');
     localStorage.removeItem('driverId');
     localStorage.removeItem('driverData');
+    localStorage.removeItem('user'); // Also remove user data
   },
   
   /**

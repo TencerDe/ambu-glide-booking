@@ -23,7 +23,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
 
   if (!isAuthenticated) {
     console.log('User not authenticated, redirecting to login');
-    // Redirect to the login page with the return URL
+    
+    // For driver routes, redirect to driver login
+    if (role && role.toLowerCase() === 'driver') {
+      return <Navigate to="/driver/login" state={{ from: location }} replace />;
+    }
+    
+    // For all other routes, redirect to the main login page
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

@@ -57,6 +57,7 @@ function App() {
           } />
           
           {/* Driver Routes */}
+          <Route path="/driver" element={<Navigate to="/driver/login" replace />} />
           <Route path="/driver/login" element={<DriverLogin />} />
           <Route path="/driver/dashboard" element={
             <ProtectedRoute role="driver">
