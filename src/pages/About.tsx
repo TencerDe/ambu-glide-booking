@@ -2,6 +2,7 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 
 const About = () => {
   return (
@@ -46,22 +47,34 @@ const About = () => {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
               <div className="text-center">
-                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                <Avatar className="w-24 h-24 mx-auto mb-3">
+                  <AvatarImage src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Tanuj Sharma" />
+                  <AvatarFallback>TS</AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold">Tanuj Sharma</h3>
                 <p className="text-gray-600 text-sm">Founder and Chief Technical Officer</p>
               </div>
               <div className="text-center">
-                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                <Avatar className="w-24 h-24 mx-auto mb-3">
+                  <AvatarImage src="https://images.unsplash.com/photo-1605810230434-7631ac76ec81?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Sachin Bisht" />
+                  <AvatarFallback>SB</AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold">Sachin Bisht</h3>
                 <p className="text-gray-600 text-sm">Co-Founder and Chief Executive Officer</p>
               </div>
               <div className="text-center">
-                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                <Avatar className="w-24 h-24 mx-auto mb-3">
+                  <AvatarImage src="https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Lakshay Vashisht" />
+                  <AvatarFallback>LV</AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold">Lakshay Vashisht</h3>
                 <p className="text-gray-600 text-sm">Co-Founder and Chief Technical Officer</p>
               </div>
               <div className="text-center">
-                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                <Avatar className="w-24 h-24 mx-auto mb-3">
+                  <AvatarImage src="https://images.unsplash.com/photo-1500673922987-e212871fec22?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Ambika Pundir" />
+                  <AvatarFallback>AP</AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold">Ambika Pundir</h3>
                 <p className="text-gray-600 text-sm">Co-Founder and Chief Operation Manager</p>
               </div>
