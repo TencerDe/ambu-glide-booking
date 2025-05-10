@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { driverNotificationsSocket } from '@/services/websocketService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RideRequest {
   id: string;
@@ -35,6 +35,8 @@ const DriverDashboard = () => {
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentRide, setCurrentRide] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locationTracking, setLocationTracking] = useState<boolean>(false);
+  const [locationInterval, setLocationInterval] = useState<number | null>(null);
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -67,6 +69,86 @@ const DriverDashboard = () => {
       setLoading(false);
     }
   }, [loading]);
+
+  // Function to start location tracking
+  const startLocationTracking = useCallback(() => {
+    if (locationTracking || !currentRide) return;
+    
+    console.log('Starting driver location tracking...');
+    
+    // Start tracking location
+    const intervalId = window.setInterval(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            console.log('Driver location updated:', { latitude, longitude });
+            
+            try {
+              // Update location in the ride_requests table
+              const { error } = await supabase
+                .from('ride_requests')
+                .update({
+                  driver_latitude: latitude,
+                  driver_longitude: longitude,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', currentRide.id)
+                .eq('driver_id', driverProfile?.id);
+                
+              if (error) {
+                console.error('Error updating driver location:', error);
+              }
+            } catch (err) {
+              console.error('Failed to update location:', err);
+            }
+          },
+          (error) => {
+            console.error('Geolocation error:', error);
+            if (error.code === 1) { // Permission denied
+              toast.error('Location permission denied. Please enable location services.');
+              stopLocationTracking();
+            }
+          }
+        );
+      } else {
+        toast.error('Geolocation is not supported by this browser.');
+        stopLocationTracking();
+      }
+    }, 10000); // Update every 10 seconds
+    
+    setLocationInterval(intervalId);
+    setLocationTracking(true);
+    toast.success('Location tracking started');
+  }, [currentRide, locationTracking, driverProfile]);
+  
+  // Function to stop location tracking
+  const stopLocationTracking = useCallback(() => {
+    if (locationInterval) {
+      window.clearInterval(locationInterval);
+      setLocationInterval(null);
+      setLocationTracking(false);
+      console.log('Location tracking stopped');
+    }
+  }, [locationInterval]);
+  
+  // Start/stop location tracking when ride status changes
+  useEffect(() => {
+    if (currentRide) {
+      if (['accepted', 'en_route', 'picked_up'].includes(currentRide.status)) {
+        startLocationTracking();
+      } else {
+        stopLocationTracking();
+      }
+    } else {
+      stopLocationTracking();
+    }
+    
+    return () => {
+      stopLocationTracking();
+    };
+  }, [currentRide, startLocationTracking, stopLocationTracking]);
 
   // Setup WebSocket listener for real-time ride notifications
   useEffect(() => {

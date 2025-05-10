@@ -82,6 +82,8 @@ export type Database = {
           charge: number
           created_at: string
           driver_id: string | null
+          driver_latitude: number | null
+          driver_longitude: number | null
           hospital: string
           id: string
           latitude: number | null
@@ -99,6 +101,8 @@ export type Database = {
           charge?: number
           created_at?: string
           driver_id?: string | null
+          driver_latitude?: number | null
+          driver_longitude?: number | null
           hospital: string
           id?: string
           latitude?: number | null
@@ -116,6 +120,8 @@ export type Database = {
           charge?: number
           created_at?: string
           driver_id?: string | null
+          driver_latitude?: number | null
+          driver_longitude?: number | null
           hospital?: string
           id?: string
           latitude?: number | null

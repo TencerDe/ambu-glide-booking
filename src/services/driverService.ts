@@ -247,67 +247,69 @@ export const driverService = {
   },
   
   /**
-   * Update ride status
+   * Update ride status with optional location data
    */
-  updateRideStatus: async (rideId: string, status: string, location?: { lat: number, lng: number }) => {
+  updateRideStatus: async (
+    rideId: string, 
+    status: string, 
+    location?: { lat: number, lng: number }
+  ): Promise<any> => {
     try {
-      const driverId = localStorage.getItem('driverId');
-      
-      if (!driverId) {
-        return { success: false, error: 'Driver not authenticated' };
-      }
-      
-      const updateData: any = { 
-        status, 
-        updated_at: new Date().toISOString() 
+      // Prepare update data
+      const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
       };
       
+      // Add driver location if provided
       if (location) {
         updateData.driver_latitude = location.lat;
         updateData.driver_longitude = location.lng;
       }
       
-      const { data: updatedRide, error: updateError } = await supabase
+      // Get driver ID from localStorage
+      const driverId = localStorage.getItem('driverId');
+      
+      if (!driverId) {
+        return {
+          success: false,
+          error: 'Driver ID not found'
+        };
+      }
+      
+      // Update ride in Supabase
+      const { data, error } = await supabase
         .from('ride_requests')
         .update(updateData)
         .eq('id', rideId)
-        .eq('driver_id', driverId)
-        .select();
+        .eq('driver_id', driverId);
       
-      if (updateError) {
-        throw new Error(updateError.message);
+      if (error) {
+        console.error('Error updating ride status:', error);
+        return {
+          success: false,
+          error: error.message
+        };
       }
       
-      // If the ride is completed, update driver status accordingly
+      // If ride completed, update driver availability
       if (status === 'completed') {
         await supabase
           .from('drivers')
-          .update({ 
-            is_available: true,
-            updated_at: new Date().toISOString() 
-          })
+          .update({ is_available: true })
           .eq('id', driverId);
-          
-        // Update driver data in localStorage
-        const driverDataStr = localStorage.getItem('driverData');
-        if (driverDataStr) {
-          try {
-            const driverData = JSON.parse(driverDataStr);
-            driverData.is_available = true;
-            localStorage.setItem('driverData', JSON.stringify(driverData));
-          } catch (e) {
-            console.error('Error updating driver data in localStorage:', e);
-          }
-        }
       }
       
-      return { 
-        success: true, 
-        data: updatedRide ? updatedRide[0] : null
+      return {
+        success: true,
+        data
       };
     } catch (error: any) {
-      console.error('Error updating ride status:', error);
-      return { success: false, error: error.message || 'Failed to update ride status' };
+      console.error('Error in updateRideStatus:', error);
+      return {
+        success: false,
+        error: error.message || 'An unexpected error occurred'
+      };
     }
   }
 };
