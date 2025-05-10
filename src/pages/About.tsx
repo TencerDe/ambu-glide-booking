@@ -48,7 +48,7 @@ const About = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
               <div className="text-center">
                 <Avatar className="w-24 h-24 mx-auto mb-3">
-                  <AvatarImage src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80" alt="Tanuj Sharma" />
+                  <AvatarImage src="/lovable-uploads/23a1bdd7-e524-4b12-bc26-7c5a9cb100e5.png" alt="Tanuj Sharma" />
                   <AvatarFallback>TS</AvatarFallback>
                 </Avatar>
                 <h3 className="font-semibold">Tanuj Sharma</h3>
