@@ -4,7 +4,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { adminService } from '@/services/adminService';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { ShieldCheck } from 'lucide-react';
@@ -42,15 +41,25 @@ const AdminLogin = () => {
       // For demo purposes, hardcoded credential check
       if (formData.username === "admin@ambuk.com" && formData.password === "admin123") {
         // Store admin credentials properly
-        localStorage.setItem('token', 'admin-demo-token');
-        localStorage.setItem('user', JSON.stringify({
+        const adminUser = {
           name: 'Admin',
           email: 'admin@ambuk.com',
           role: 'ADMIN'  // Use uppercase ADMIN to match the role check in ProtectedRoute
-        }));
-        localStorage.setItem('role', 'ADMIN');
+        };
+        
+        // Store user data consistently
+        localStorage.setItem('token', 'admin-demo-token');
+        localStorage.setItem('user', JSON.stringify(adminUser));
+        
+        // Force page reload to ensure auth context picks up the new user data
         toast.success('Logged in as Admin');
-        navigate('/admin/dashboard');
+        
+        // Delay navigation slightly to allow toast to show
+        setTimeout(() => {
+          navigate('/admin/dashboard');
+          // Force reload to update auth state
+          window.location.reload();
+        }, 500);
       } else {
         toast.error('Invalid credentials');
       }

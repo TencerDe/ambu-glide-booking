@@ -12,8 +12,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
   
-  // For debugging
-  console.log('ProtectedRoute:', { isAuthenticated, userRole: user?.role, requiredRole: role });
+  // Enhanced debugging for authentication issues
+  console.log('ProtectedRoute check:', { 
+    isAuthenticated, 
+    userRole: user?.role, 
+    requiredRole: role,
+    currentPath: location.pathname,
+    user: user
+  });
 
   if (!isAuthenticated) {
     console.log('User not authenticated, redirecting to login');
@@ -21,8 +27,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, role }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If role is specified, check if user has that role
-  if (role && user?.role !== role) {
+  // Case insensitive role check
+  if (role && user?.role?.toUpperCase() !== role.toUpperCase()) {
     console.log(`User doesn't have required role: ${role}, user role is: ${user?.role}`);
     // Redirect to unauthorized page or home
     return <Navigate to="/" replace />;

@@ -35,9 +35,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if the user is authenticated on mount
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      setIsAuthenticated(true);
+    const token = localStorage.getItem('token');
+    
+    console.log('Auth initialization:', { hasToken: !!token, hasStoredUser: !!storedUser });
+    
+    if (storedUser && token) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        setIsAuthenticated(true);
+        console.log('User authenticated from storage:', parsedUser);
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+        localStorage.removeItem('user');
+      }
     }
   }, []);
 
@@ -45,6 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Store user in local storage
       localStorage.setItem('user', JSON.stringify(userData));
+      if (userData.token) {
+        localStorage.setItem('token', userData.token);
+      }
       setUser(userData);
       setIsAuthenticated(true);
       navigate('/profile');
@@ -69,6 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     userService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setIsAuthenticated(false);
     setUser(null);
     navigate('/');
