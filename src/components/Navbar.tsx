@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, User, LogIn, Ambulance, Home, Phone, InfoIcon } from 'lucide-react';
+import { Menu, X, User, LogIn, Ambulance, Home } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const Navbar = () => {
@@ -60,30 +60,6 @@ const Navbar = () => {
           >
             <Home className="h-4 w-4" />
             <span>Home</span>
-          </Link>
-          
-          <Link 
-            to="/about" 
-            className={`transition-colors flex items-center space-x-1 hover:text-blue-500 ${
-              scrolled 
-                ? (isActive('/about') ? 'text-blue-600 font-medium' : 'text-gray-700') 
-                : 'text-white'
-            }`}
-          >
-            <InfoIcon className="h-4 w-4" />
-            <span>About</span>
-          </Link>
-          
-          <Link 
-            to="/contact" 
-            className={`transition-colors flex items-center space-x-1 hover:text-blue-500 ${
-              scrolled 
-                ? (isActive('/contact') ? 'text-blue-600 font-medium' : 'text-gray-700') 
-                : 'text-white'
-            }`}
-          >
-            <Phone className="h-4 w-4" />
-            <span>Contact</span>
           </Link>
           
           {!isAuthenticated ? (
@@ -167,24 +143,6 @@ const Navbar = () => {
             >
               <Home className="h-4 w-4" />
               <span>Home</span>
-            </Link>
-            
-            <Link 
-              to="/about" 
-              className="text-gray-700 hover:text-blue-600 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50"
-              onClick={toggleMenu}
-            >
-              <InfoIcon className="h-4 w-4" />
-              <span>About</span>
-            </Link>
-            
-            <Link 
-              to="/contact" 
-              className="text-gray-700 hover:text-blue-600 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50"
-              onClick={toggleMenu}
-            >
-              <Phone className="h-4 w-4" />
-              <span>Contact</span>
             </Link>
             
             {!isAuthenticated ? (

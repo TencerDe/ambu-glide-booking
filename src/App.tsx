@@ -14,8 +14,6 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import DriverLogin from './pages/driver/DriverLogin';
 import DriverDashboard from './pages/driver/DriverDashboard';
-import About from './pages/About';
-import Contact from './pages/Contact';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -43,8 +41,6 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/bookAmbulance" element={<BookAmbulance />} />
           <Route path="/book-ambulance" element={<BookAmbulance />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
           
           {/* Protected Routes */}
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

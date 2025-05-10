@@ -9,7 +9,7 @@ const Footer = () => {
   return (
     <footer className="w-full py-16 bg-gradient-to-b from-gray-900 to-blue-950">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
           <div className="space-y-6">
             <Link to="/" className="text-2xl font-bold text-white flex items-center space-x-2 mb-6">
               <Ambulance className="h-7 w-7" />
@@ -75,39 +75,6 @@ const Footer = () => {
                 <a href="#" className="text-blue-200 hover:text-white transition-colors flex items-center group">
                   <ArrowRight className="h-4 w-4 mr-2 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
                   <span>Patient Monitoring</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-6 flex items-center">
-              <span className="w-8 h-1 bg-blue-500 mr-2"></span>
-              Quick Links
-            </h3>
-            <ul className="space-y-4">
-              <li>
-                <Link to="/about" className="text-blue-200 hover:text-white transition-colors flex items-center group">
-                  <ArrowRight className="h-4 w-4 mr-2 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                  <span>About Us</span>
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact" className="text-blue-200 hover:text-white transition-colors flex items-center group">
-                  <ArrowRight className="h-4 w-4 mr-2 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                  <span>Contact</span>
-                </Link>
-              </li>
-              <li>
-                <a href="#" className="text-blue-200 hover:text-white transition-colors flex items-center group">
-                  <ArrowRight className="h-4 w-4 mr-2 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                  <span>Pricing</span>
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-blue-200 hover:text-white transition-colors flex items-center group">
-                  <ArrowRight className="h-4 w-4 mr-2 opacity-0 -ml-6 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                  <span>FAQ</span>
                 </a>
               </li>
             </ul>
