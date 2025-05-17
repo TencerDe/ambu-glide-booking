@@ -43,10 +43,24 @@ export function ThemeProvider({
         : "light";
       
       root.classList.add(systemTheme);
+      
+      // Force apply correct background and text colors
+      if (systemTheme === "dark") {
+        document.body.classList.add("dark-mode");
+      } else {
+        document.body.classList.remove("dark-mode");
+      }
       return;
     }
     
     root.classList.add(theme);
+    
+    // Force apply correct background and text colors
+    if (theme === "dark") {
+      document.body.classList.add("dark-mode");
+    } else {
+      document.body.classList.remove("dark-mode");
+    }
   }, [theme]);
 
   const value = {

@@ -9,13 +9,34 @@
     'Helvetica Neue', sans-serif;
 }
 
+/* Dark mode specific styles */
+:root.dark {
+  --gradient-bg: linear-gradient(135deg, #1a1f2c, #1e293b);
+  --subtle-gradient-bg: linear-gradient(180deg, #0f172a, #1e1b4b);
+  --card-bg: #1a1f2c;
+  --card-border: #2a3147;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+}
+
+:root:not(.dark) {
+  --gradient-bg: linear-gradient(135deg, #0f172a, #1e40af);
+  --subtle-gradient-bg: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+}
+
 /* Modern gradient backgrounds */
 .gradient-bg {
-  background: linear-gradient(135deg, #0f172a, #1e40af);
+  background: var(--gradient-bg);
+  color: var(--text-primary);
 }
 
 .subtle-gradient-bg {
-  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  background: var(--subtle-gradient-bg);
+  color: var(--text-primary);
 }
 
 /* Button animations with improved effects */
@@ -34,6 +55,11 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass-effect {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Animation utilities */
@@ -91,7 +117,7 @@
 .timeline-item {
   position: relative;
   padding-left: 2rem;
-  border-left: 2px solid #e5e7eb;
+  border-left: 2px solid var(--card-border);
   margin-bottom: 1.5rem;
 }
 
@@ -110,10 +136,11 @@
 .feature-card {
   padding: 2rem;
   border-radius: 1rem;
-  background-color: white;
+  background-color: var(--card-bg);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
 }
 
 .feature-card:hover {
@@ -128,7 +155,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--card-bg);
   border-radius: 4px;
 }
 
@@ -175,6 +202,10 @@
   background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232563eb' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
+.dark .tech-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%233b82f6' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
 .blob-shape {
   position: absolute;
   top: 50%;
@@ -186,6 +217,10 @@
   border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
   z-index: -1;
   animation: blob-animation 25s infinite alternate;
+}
+
+.dark .blob-shape {
+  background: linear-gradient(45deg, rgba(30, 64, 175, 0.3), rgba(30, 58, 138, 0.3));
 }
 
 @keyframes blob-animation {
@@ -223,6 +258,13 @@
   background-clip: text;
 }
 
+.dark .gradient-text {
+  background: linear-gradient(to right, #60a5fa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .section-divider {
   height: 5rem;
   position: relative;
@@ -235,6 +277,48 @@
   bottom: 0;
   width: 100%;
   height: 5rem;
-  background: linear-gradient(to bottom right, transparent 49%, white 50%);
+  background: linear-gradient(to bottom right, transparent 49%, var(--card-bg) 50%);
 }
 
+/* Dark mode specific overrides */
+.dark body {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+.dark .card, 
+.dark .bg-white, 
+.dark [class*='bg-gray-100'], 
+.dark [class*='bg-gray-50'] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark input, 
+.dark textarea, 
+.dark select {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark h1, 
+.dark h2, 
+.dark h3, 
+.dark h4, 
+.dark h5, 
+.dark h6 {
+  color: #f1f5f9 !important;
+}
+
+.dark p, 
+.dark span, 
+.dark div {
+  color: inherit;
+}
+
+.dark-mode {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
