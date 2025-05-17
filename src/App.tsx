@@ -3,6 +3,8 @@ import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { AuthProvider } from './hooks/useAuth';
+import { ThemeProvider } from './providers/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 
 // Pages
 import Index from './pages/Index';
@@ -58,37 +60,40 @@ function App() {
 
   return (
     <AuthProvider>
-      <div className="app-container">
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/bookAmbulance" element={<BookAmbulance />} />
-          <Route path="/book-ambulance" element={<BookAmbulance />} />
-          
-          {/* Protected Routes */}
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          
-          {/* Admin Routes */}
-          <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute role="ADMIN">
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          
-          {/* Driver Routes */}
-          <Route path="/driver" element={<Navigate to="/driver/login" replace />} />
-          <Route path="/driver/login" element={<DriverLogin />} />
-          <Route path="/driver/dashboard" element={
-            <ProtectedRoute role="driver">
-              <DriverDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
+      <ThemeProvider>
+        <div className="app-container">
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/bookAmbulance" element={<BookAmbulance />} />
+            <Route path="/book-ambulance" element={<BookAmbulance />} />
+            
+            {/* Protected Routes */}
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={
+              <ProtectedRoute role="ADMIN">
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Driver Routes */}
+            <Route path="/driver" element={<Navigate to="/driver/login" replace />} />
+            <Route path="/driver/login" element={<DriverLogin />} />
+            <Route path="/driver/dashboard" element={
+              <ProtectedRoute role="driver">
+                <DriverDashboard />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <Toaster />
+        </div>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

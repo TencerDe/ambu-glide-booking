@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, X, User, LogIn, Ambulance, Home } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { ThemeToggle } from './ThemeToggle';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,11 +43,11 @@ const Navbar = () => {
   };
 
   return (
-    <nav className={`w-full px-4 py-3 fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white shadow-md backdrop-blur-lg bg-opacity-80' : 'bg-transparent'}`}>
+    <nav className={`w-full px-4 py-3 fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white dark:bg-gray-900 shadow-md backdrop-blur-lg bg-opacity-80 dark:bg-opacity-80' : 'bg-transparent'}`}>
       <div className="container mx-auto flex justify-between items-center">
         <Link to="/" className="text-2xl font-bold flex items-center space-x-2 transition-transform hover:scale-105">
           <span className="text-3xl">🚑</span> 
-          <span className={`font-bold ${scrolled ? 'text-blue-600' : 'text-white'}`}>Ambuk</span>
+          <span className={`font-bold ${scrolled ? 'text-blue-600 dark:text-blue-400' : 'text-white'}`}>Ambuk</span>
         </Link>
         
         <div className="hidden md:flex items-center space-x-6">
@@ -54,7 +55,7 @@ const Navbar = () => {
             to="/" 
             className={`transition-colors flex items-center space-x-1 hover:text-blue-500 ${
               scrolled 
-                ? (isActive('/') ? 'text-blue-600 font-medium' : 'text-gray-700') 
+                ? (isActive('/') ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300') 
                 : 'text-white'
             }`}
           >
@@ -67,7 +68,7 @@ const Navbar = () => {
               to="/login" 
               className={`transition-colors flex items-center space-x-1 hover:text-blue-500 ${
                 scrolled 
-                  ? (isActive('/login') ? 'text-blue-600 font-medium' : 'text-gray-700') 
+                  ? (isActive('/login') ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300') 
                   : 'text-white'
               }`}
             >
@@ -80,7 +81,7 @@ const Navbar = () => {
                 to="/profile" 
                 className={`transition-colors hover:text-blue-500 ${
                   scrolled 
-                    ? (isActive('/profile') ? 'text-blue-600 font-medium' : 'text-gray-700') 
+                    ? (isActive('/profile') ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300') 
                     : 'text-white'
                 }`}
               >
@@ -89,7 +90,7 @@ const Navbar = () => {
               <Button 
                 variant="outline" 
                 onClick={logout} 
-                className={scrolled ? "text-gray-700 border-gray-300 hover:bg-gray-100" : "text-white border-white hover:bg-white/10"}
+                className={scrolled ? "text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800" : "text-white border-white hover:bg-white/10"}
               >
                 Logout
               </Button>
@@ -101,7 +102,7 @@ const Navbar = () => {
             className={`rounded-full font-medium px-5 py-2 shadow-lg ${
               scrolled 
                 ? "bg-blue-600 hover:bg-blue-700 text-white" 
-                : "bg-white text-blue-700 hover:bg-blue-50"
+                : "bg-white text-blue-700 dark:bg-gray-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700"
             } flex items-center space-x-2 hover:-translate-y-0.5 transition-all duration-300`}
             onClick={handleBookAmbulance}
           >
@@ -114,7 +115,7 @@ const Navbar = () => {
               variant="outline" 
               className={`rounded-full ${
                 scrolled 
-                ? "text-blue-600 border-blue-600 hover:bg-blue-50" 
+                ? "text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20" 
                 : "text-white border-white hover:bg-white/10"
               } flex items-center space-x-1`}
             >
@@ -122,23 +123,28 @@ const Navbar = () => {
               <span>Driver Portal</span>
             </Button>
           </Link>
+          
+          <ThemeToggle />
         </div>
 
-        <button 
-          className={`md:hidden ${scrolled ? 'text-gray-700' : 'text-white'}`} 
-          onClick={toggleMenu}
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="md:hidden flex items-center gap-2">
+          <ThemeToggle />
+          <button 
+            className={`${scrolled ? 'text-gray-700 dark:text-gray-300' : 'text-white'}`} 
+            onClick={toggleMenu}
+          >
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden absolute top-16 left-0 right-0 bg-white shadow-lg rounded-b-lg animate-fade-in z-50">
+        <div className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 shadow-lg rounded-b-lg animate-fade-in z-50">
           <div className="flex flex-col items-center py-6 space-y-4 px-4">
             <Link 
               to="/" 
-              className="text-gray-700 hover:text-blue-600 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50"
+              className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
               onClick={toggleMenu}
             >
               <Home className="h-4 w-4" />
@@ -148,7 +154,7 @@ const Navbar = () => {
             {!isAuthenticated ? (
               <Link 
                 to="/login" 
-                className="text-gray-700 hover:text-blue-600 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50"
+                className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                 onClick={toggleMenu}
               >
                 <User className="h-4 w-4" />
@@ -158,7 +164,7 @@ const Navbar = () => {
               <>
                 <Link 
                   to="/profile" 
-                  className="text-gray-700 hover:text-blue-600 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50"
+                  className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center space-x-2 w-full px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
                   onClick={toggleMenu}
                 >
                   <User className="h-4 w-4" />
@@ -170,7 +176,7 @@ const Navbar = () => {
                     logout();
                     toggleMenu();
                   }}
-                  className="text-gray-700 border-gray-300 hover:bg-gray-50 w-full justify-center"
+                  className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 w-full justify-center"
                 >
                   Logout
                 </Button>
@@ -196,7 +202,7 @@ const Navbar = () => {
             >
               <Button 
                 variant="outline" 
-                className="text-blue-600 border-blue-600 hover:bg-blue-50 flex items-center space-x-2 w-full justify-center rounded-full"
+                className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center space-x-2 w-full justify-center rounded-full"
               >
                 <LogIn className="h-4 w-4" />
                 <span>Driver Portal</span>
